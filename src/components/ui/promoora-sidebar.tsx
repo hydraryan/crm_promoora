@@ -511,6 +511,36 @@ export function PromoosaSidebar({
     return ROLE_SECTION_ACCESS[role][section]
   }
 
+  const canSeeMenuItem = (itemId: string, section: SectionKey): boolean => {
+    if (section === 'team' && itemId === 'team/add') {
+      if (permissionCtx) return Boolean(permissionCtx.permissions?.team?.create)
+      return role === 'admin'
+    }
+
+    if (section === 'settings') {
+      if (itemId === 'settings/password') return true
+
+      if (permissionCtx) {
+        if (itemId === 'settings/profile') {
+          return Boolean(permissionCtx.permissions?.settings?.view)
+        }
+
+        if (itemId === 'settings/roles' || itemId === 'settings/invite') {
+          return Boolean(
+            permissionCtx.permissions?.team?.create ||
+              permissionCtx.permissions?.settings?.create ||
+              permissionCtx.permissions?.settings?.edit ||
+              permissionCtx.permissions?.settings?.delete
+          )
+        }
+      }
+
+      return role === 'admin'
+    }
+
+    return true
+  }
+
   const firstVisible = useMemo(() => {
     const allowed = ICON_RAIL_ORDER.find((section) => canAccessSection(section))
     return allowed ?? 'dashboard'
@@ -597,8 +627,7 @@ export function PromoosaSidebar({
                 <p className="mb-2 px-2 text-[12px] font-normal uppercase tracking-[0.08em] text-[#525252]">{group.label}</p>
                 <div className="space-y-1">
                   {group.items
-                    .filter((item) => !(sectionForRender === 'team' && item.id === 'team/add' && role !== 'admin'))
-                    .filter((item) => !(sectionForRender === 'settings' && role !== 'admin' && item.id !== 'settings/password'))
+                    .filter((item) => canSeeMenuItem(item.id, sectionForRender))
                     .map((item) => {
                     const isItemSelected = selectedItemId === item.id
                     const hasSubItems = Boolean(item.subItems?.length)

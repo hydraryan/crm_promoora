@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CRMHeader } from '@/components/ui/crm-header'
 import { PromoosaSidebar } from '@/components/ui/promoora-sidebar'
 import { PermissionProvider } from '@/context/PermissionContext'
+import { usePermissions } from '@/context/PermissionContext'
 import DemoOne from './demo'
 import DashboardPage from './pages/dashboard.tsx'
 import PipelineSummary from './pages/dashboard/PipelineSummary'
@@ -40,6 +41,7 @@ import { commViewMap } from './utils/commConstants'
 const SESSION_KEY = 'crm_portal_secure_session'
 
 function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
+  const { permissions } = usePermissions()
   const [isDetailCollapsed, setIsDetailCollapsed] = useState(false)
   const [activeSection, setActiveSection] = useState('dashboard')
   const [activeItemId, setActiveItemId] = useState('dashboard-overview')
@@ -72,6 +74,8 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
 
   const userName = storedUser?.name ?? 'Aryan Singh'
   const role = (storedUser?.role ?? 'admin') as Role
+  const canCreateTeamMembers = Boolean(permissions?.team?.create)
+  const canViewSettings = Boolean(permissions?.settings?.view)
   const firstName = userName.split(' ')[0] ?? 'Aryan'
   const initials = userName
     .split(' ')
@@ -91,7 +95,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
     team: 'team/all',
     communication: 'comm/all',
     reports: 'reports/lead-conversion',
-    settings: role === 'admin' ? 'settings/profile' : 'settings/password',
+    settings: canViewSettings ? 'settings/profile' : 'settings/password',
   }
 
   const clientTypeViewMap: Record<string, { defaultBusinessType: BusinessType; titleOverride: string }> = {
@@ -299,7 +303,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
         return <TeamList role={role} currentUserId={currentUserId} defaultRole="admin" titleOverride="Admins" onOpenMember={(memberId) => setActiveItemId(`team/member/${memberId}`)} />
       }
 
-      if (activeItemId === 'team/add' && role === 'admin') {
+      if (activeItemId === 'team/add' && canCreateTeamMembers) {
         return <TeamList role={role} currentUserId={currentUserId} openAddModal titleOverride="All members" onOpenMember={(memberId) => setActiveItemId(`team/member/${memberId}`)} />
       }
 
@@ -393,7 +397,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
           onSectionChange={(section) => {
             setActiveSection(section)
             if (section === 'settings') {
-              setActiveItemId(role === 'admin' ? 'settings/profile' : 'settings/password')
+              setActiveItemId(canViewSettings ? 'settings/profile' : 'settings/password')
             } else {
               setActiveItemId(sectionDefaults[section] ?? `${section}-overview`)
             }
