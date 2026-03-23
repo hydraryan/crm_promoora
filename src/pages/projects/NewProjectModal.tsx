@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
+import { usePermissions } from '@/context/PermissionContext'
 import { PROJECT_STATUSES, SERVICE_TYPES, type Project, type ProjectStatus, type ServiceType } from '@/utils/projectConstants'
 
 interface NewProjectModalProps {
@@ -10,17 +11,8 @@ interface NewProjectModalProps {
 }
 
 export default function NewProjectModal({ isOpen, onClose, onCreated }: NewProjectModalProps) {
-  const storedUser = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('crm_user') ?? '{}') as {
-        role?: string
-      }
-    } catch {
-      return {}
-    }
-  }, [])
-
-  const role = storedUser.role ?? 'viewer'
+  const { permissions } = usePermissions()
+  const canCreateProjects = Boolean(permissions?.projects?.create)
 
   const [submitting, setSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
@@ -42,7 +34,7 @@ export default function NewProjectModal({ isOpen, onClose, onCreated }: NewProje
   })
 
   useEffect(() => {
-    if (!isOpen || !(role === 'admin' || role === 'tech_intern')) return
+    if (!isOpen || !canCreateProjects) return
 
     Promise.all([
       apiFetch<{ clients: Array<{ _id: string; businessName: string }> }>('/clients').catch(() => ({ clients: [] })),
@@ -51,10 +43,10 @@ export default function NewProjectModal({ isOpen, onClose, onCreated }: NewProje
       setClients(clientRes.clients)
       setTeamMembers(memberRes.members)
     })
-  }, [isOpen, role])
+  }, [isOpen, canCreateProjects])
 
   if (!isOpen) return null
-  if (!(role === 'admin' || role === 'tech_intern')) return null
+  if (!canCreateProjects) return null
 
   function toggleAssigned(id: string) {
     setForm((f) => ({

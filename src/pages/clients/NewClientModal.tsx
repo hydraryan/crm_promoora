@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
+import { usePermissions } from '@/context/PermissionContext'
 import { BUSINESS_TYPES, CLIENT_STATUSES, type BusinessType, type Client, type ClientStatus } from '@/utils/clientConstants'
 
 const SERVICES = ['Website', 'HRM', 'CRM', 'UI/UX', 'Other']
@@ -13,12 +14,12 @@ interface NewClientModalProps {
 }
 
 export default function NewClientModal({ isOpen, onClose, onCreated, convertedFromLeadId }: NewClientModalProps) {
+  const { permissions } = usePermissions()
   const storedUser = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('crm_user') ?? '{}') as {
         _id?: string
         id?: string
-        role?: string
       }
     } catch {
       return {}
@@ -26,7 +27,8 @@ export default function NewClientModal({ isOpen, onClose, onCreated, convertedFr
   }, [])
 
   const userId = storedUser._id ?? storedUser.id ?? ''
-  const role = storedUser.role ?? 'viewer'
+  const canCreateClients = Boolean(permissions?.clients?.create)
+  const canViewTeam = Boolean(permissions?.team?.view)
 
   const [submitting, setSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
@@ -50,12 +52,12 @@ export default function NewClientModal({ isOpen, onClose, onCreated, convertedFr
   })
 
   useEffect(() => {
-    if (!isOpen || role !== 'admin') return
+    if (!isOpen || !canViewTeam) return
 
     apiFetch<{ members: Array<{ _id: string; name: string }> }>('/team/members')
       .then((data) => setTeamMembers(data.members))
       .catch(() => setTeamMembers([]))
-  }, [isOpen, role])
+  }, [isOpen, canViewTeam])
 
   useEffect(() => {
     if (isOpen) {
@@ -68,7 +70,7 @@ export default function NewClientModal({ isOpen, onClose, onCreated, convertedFr
   }, [isOpen, userId, convertedFromLeadId])
 
   if (!isOpen) return null
-  if (role !== 'admin') return null
+  if (!canCreateClients) return null
 
   function toggleService(service: string) {
     setForm((f) => ({

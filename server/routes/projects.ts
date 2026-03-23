@@ -3,7 +3,7 @@ import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
 import { Activity } from '../models/Activity.js'
 import { Client } from '../models/Client.js'
 import { PROJECT_STATUSES, Project, SERVICE_TYPES, type ProjectStatus, type ServiceType } from '../models/Project.js'
-import { getAuthContext, isAdmin } from './_helpers.js'
+import { getAuthContext, hasModulePermission, isAdmin, type AuthContext } from './_helpers.js'
 
 const router = Router()
 
@@ -59,8 +59,8 @@ function serializeProject(project: any) {
   }
 }
 
-function isProjectEditor(roleName: string): boolean {
-  return roleName === 'admin' || roleName === 'tech_intern'
+function canProjectEdit(auth: AuthContext): boolean {
+  return hasModulePermission(auth, 'projects', 'create') || hasModulePermission(auth, 'projects', 'edit')
 }
 
 router.get('/', async (req: AuthRequest, res: Response) => {
@@ -116,7 +116,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
-    if (!isProjectEditor(auth.roleName)) {
+    if (!canProjectEdit(auth)) {
       return res.status(403).json({ error: 'Not allowed to create projects' })
     }
 
@@ -228,7 +228,7 @@ router.post('/:id/tasks', async (req: AuthRequest, res: Response) => {
     const project = await Project.findById(req.params.id)
     if (!project) return res.status(404).json({ error: 'Project not found' })
 
-    const canEdit = isProjectEditor(auth.roleName) || project.assignedTo.some((member) => member.toString() === auth.userId)
+    const canEdit = canProjectEdit(auth) || project.assignedTo.some((member) => member.toString() === auth.userId)
     if (!canEdit) {
       return res.status(403).json({ error: 'Not allowed to add tasks' })
     }
@@ -278,7 +278,7 @@ router.patch('/:id/tasks/:taskId', async (req: AuthRequest, res: Response) => {
     const project = await Project.findById(req.params.id)
     if (!project) return res.status(404).json({ error: 'Project not found' })
 
-    const canEdit = isProjectEditor(auth.roleName) || project.assignedTo.some((member) => member.toString() === auth.userId)
+    const canEdit = canProjectEdit(auth) || project.assignedTo.some((member) => member.toString() === auth.userId)
     if (!canEdit) {
       return res.status(403).json({ error: 'Not allowed to update tasks' })
     }
@@ -380,7 +380,7 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     const project = await Project.findById(req.params.id)
     if (!project) return res.status(404).json({ error: 'Project not found' })
 
-    const canEdit = isProjectEditor(auth.roleName) || project.assignedTo.some((member) => member.toString() === auth.userId)
+    const canEdit = canProjectEdit(auth) || project.assignedTo.some((member) => member.toString() === auth.userId)
     if (!canEdit) {
       return res.status(403).json({ error: 'Not allowed to update this project' })
     }

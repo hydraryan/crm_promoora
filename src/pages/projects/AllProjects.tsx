@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, ChevronRight, Plus, Search } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
+import { usePermissions } from '@/context/PermissionContext'
 import {
   priorityColors,
   PROJECT_STATUSES,
@@ -22,15 +23,9 @@ interface AllProjectsProps {
 }
 
 export default function AllProjects({ defaultStatus, defaultServiceType, titleOverride, openNewProjectModal }: AllProjectsProps) {
-  const storedUser = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('crm_user') ?? '{}') as { role?: string }
-    } catch {
-      return {}
-    }
-  }, [])
-
-  const role = storedUser.role ?? 'viewer'
+  const { permissions } = usePermissions()
+  const canCreateProjects = Boolean(permissions?.projects?.create)
+  const canViewTeam = Boolean(permissions?.team?.view)
 
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,7 +57,7 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
     try {
       const [projectRes, teamRes] = await Promise.all([
         apiFetch<{ projects: Project[]; total: number }>('/projects'),
-        role === 'admin'
+        canViewTeam
           ? apiFetch<{ members: Array<{ _id: string; name: string; initials?: string }> }>('/team/members').catch(() => ({ members: [] }))
           : Promise.resolve({ members: [] as Array<{ _id: string; name: string; initials?: string }> }),
       ])
@@ -135,7 +130,7 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
           </h1>
         </div>
 
-        {(role === 'admin' || role === 'tech_intern') && (
+        {canCreateProjects && (
           <button
             onClick={() => setShowNewProjectModal(true)}
             className="flex items-center gap-2 rounded-xl bg-[#6366f1] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-[#4f46e5]"
@@ -239,7 +234,7 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
           <option value="low">Low</option>
         </select>
 
-        {role === 'admin' && (
+        {canViewTeam && (
           <select
             value={assignedFilter}
             onChange={(e) => setAssignedFilter(e.target.value)}

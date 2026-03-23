@@ -4,7 +4,7 @@ import { Activity } from '../models/Activity.js'
 import { BUSINESS_TYPES, CLIENT_STATUSES, Client, type ClientBusinessType, type ClientStatus } from '../models/Client.js'
 import { FollowUp } from '../models/FollowUp.js'
 import { Project } from '../models/Project.js'
-import { getAuthContext, isAdmin } from './_helpers.js'
+import { getAuthContext, hasModulePermission, isAdmin } from './_helpers.js'
 
 const router = Router()
 
@@ -101,8 +101,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
-    if (!isAdmin(auth.roleName)) {
-      return res.status(403).json({ error: 'Only admins can create clients' })
+    if (!hasModulePermission(auth, 'clients', 'create')) {
+      return res.status(403).json({ error: 'Not allowed to create clients' })
     }
 
     const {

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronRight, Plus, Search } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
+import { usePermissions } from '@/context/PermissionContext'
 import { businessTypeIcons, BUSINESS_TYPES, CLIENT_STATUSES, statusDot, type BusinessType, type Client, type ClientStatus } from '@/utils/clientConstants'
 import NewClientModal from './NewClientModal'
 import ClientDetailDrawer from './ClientDetailDrawer'
@@ -13,17 +14,9 @@ interface AllClientsProps {
 }
 
 export default function AllClients({ defaultStatus, defaultBusinessType, titleOverride, openNewClientModal }: AllClientsProps) {
-  const storedUser = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('crm_user') ?? '{}') as {
-        role?: string
-      }
-    } catch {
-      return {}
-    }
-  }, [])
-
-  const role = storedUser.role ?? 'viewer'
+  const { permissions } = usePermissions()
+  const canCreateClients = Boolean(permissions?.clients?.create)
+  const canViewTeam = Boolean(permissions?.team?.view)
 
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,7 +50,7 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
     try {
       const [clientRes, teamRes] = await Promise.all([
         apiFetch<{ clients: Client[]; total: number }>('/clients'),
-        role === 'admin'
+        canViewTeam
           ? apiFetch<{ members: Array<{ _id: string; name: string; initials?: string }> }>('/team/members').catch(() => ({ members: [] }))
           : Promise.resolve({ members: [] as Array<{ _id: string; name: string; initials?: string }> }),
       ])
@@ -130,7 +123,7 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
           </h1>
         </div>
 
-        {role === 'admin' && (
+        {canCreateClients && (
           <button
             onClick={() => setShowNewClientModal(true)}
             className="flex items-center gap-2 rounded-xl bg-[#6366f1] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-[#4f46e5]"
@@ -188,7 +181,7 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
           </select>
         )}
 
-        {role === 'admin' && (
+        {canViewTeam && (
           <select
             value={assignedFilter}
             onChange={(e) => setAssignedFilter(e.target.value)}
