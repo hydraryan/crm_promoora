@@ -1,0 +1,27 @@
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .proposal-document,
+  .proposal-document * {
+    visibility: visible;
+  }
+
+  .proposal-document {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white !important;
+    color: #111 !important;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

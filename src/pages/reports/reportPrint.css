@@ -1,0 +1,58 @@
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .report-print-header {
+    display: block !important;
+  }
+
+  .report-print-footer {
+    display: block !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .min-h-full {
+    background: white !important;
+  }
+
+  .report-print-header > div,
+  .report-print-footer > div {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .recharts-wrapper,
+  .recharts-surface {
+    background: white !important;
+  }
+
+  .recharts-cartesian-axis-tick text {
+    fill: #555 !important;
+  }
+
+  .recharts-tooltip-wrapper {
+    display: none !important;
+  }
+
+  .stat-card {
+    background: #f8f8f8 !important;
+    border: 0.5px solid #eee !important;
+  }
+
+  .stat-card .stat-label {
+    color: #bbb !important;
+  }
+
+  .period-selector-row {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+}

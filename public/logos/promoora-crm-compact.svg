@@ -1,0 +1,10 @@
+<svg viewBox="0 0 252 58" xmlns="http://www.w3.org/2000/svg" width="252" height="58">
+  <rect width="252" height="58" rx="10" fill="#050D14"/>
+  <text x="8" y="46" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="34" font-weight="300" fill="#DDF0FF">Promo</text>
+  <circle cx="113" cy="28" r="3.5" fill="#0077FF"/>
+  <text x="120" y="46" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="34" font-weight="300" fill="#00C2FF" opacity="0.45">[</text>
+  <text x="132" y="46" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#00C2FF">ora</text>
+  <text x="188" y="46" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="34" font-weight="300" fill="#00C2FF" opacity="0.45">]</text>
+  <rect x="207" y="24" width="43" height="20" rx="4" fill="#00C2FF"/>
+  <text x="228" y="35" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#050D14" text-anchor="middle" dominant-baseline="central" letter-spacing="1.5">CRM</text>
+</svg>
