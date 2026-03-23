@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePermissions } from '@/context/PermissionContext'
+import type { Role } from '@/utils/teamConstants'
 import {
   AlertCircle,
   BarChart2,
@@ -54,8 +55,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-type UserRole = 'admin' | 'bd_intern' | 'tech_intern' | 'viewer'
-
 type SectionKey =
   | 'dashboard'
   | 'leads'
@@ -89,7 +88,7 @@ interface SectionConfig {
 }
 
 export interface PromoosaSidebarProps {
-  role: UserRole
+  role: Role
   activeSection: string
   onSectionChange: (section: string) => void
   isDetailCollapsed: boolean
@@ -110,7 +109,7 @@ const ICON_RAIL_ORDER: SectionKey[] = [
   'reports',
 ]
 
-const ROLE_SECTION_ACCESS: Record<UserRole, Record<SectionKey, boolean>> = {
+const ROLE_SECTION_ACCESS: Record<Role, Record<SectionKey, boolean>> = {
   admin: {
     dashboard: true,
     leads: true,

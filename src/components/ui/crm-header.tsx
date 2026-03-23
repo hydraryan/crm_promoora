@@ -14,8 +14,7 @@ import {
   User,
   type LucideIcon,
 } from 'lucide-react'
-
-type UserRole = 'admin' | 'bd_intern' | 'tech_intern' | 'viewer'
+import type { Role } from '@/utils/teamConstants'
 
 interface CRMHeaderProps {
   isDetailCollapsed: boolean
@@ -23,7 +22,7 @@ interface CRMHeaderProps {
   activeSection: string
   userName: string
   userInitials: string
-  role: UserRole
+  role: Role
   onViewProfile: () => void
   onSignOut: () => void
 }

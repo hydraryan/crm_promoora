@@ -1,9 +1,9 @@
 import { Plus } from 'lucide-react'
 import type { CSSProperties } from 'react'
+import { usePermissions } from '@/context/PermissionContext'
 
 interface DashboardPageProps {
   userName: string
-  role: 'admin' | 'bd_intern' | 'tech_intern' | 'viewer'
 }
 
 const mockStats = {
@@ -66,10 +66,10 @@ const mockUpcoming = [
 ]
 
 const quickActions = [
-  { id: 'lead', label: 'Add lead' },
-  { id: 'follow-up', label: 'Log follow-up' },
-  { id: 'proposal', label: 'Create proposal' },
-  { id: 'client', label: 'Add client' },
+  { id: 'lead', label: 'Add lead', module: 'leads' },
+  { id: 'follow-up', label: 'Log follow-up', module: 'followups' },
+  { id: 'proposal', label: 'Create proposal', module: 'proposals' },
+  { id: 'client', label: 'Add client', module: 'clients' },
 ] as const
 
 function getGreeting(): string {
@@ -95,16 +95,19 @@ function proposalAssignee(id: number): string {
   return assignmentOrder[(id - 1) % assignmentOrder.length]
 }
 
-export default function DashboardPage({ userName, role }: DashboardPageProps) {
+export default function DashboardPage({ userName }: DashboardPageProps) {
+  const { permissions } = usePermissions()
+
+  const canView = (module: string) => Boolean(permissions?.[module]?.view)
+  const canCreate = (module: string) => Boolean(permissions?.[module]?.create)
+
+  // Personal scope is applied for creator-level users without team management permissions.
+  const shouldUsePersonalScope = !canCreate('team') && (canCreate('leads') || canCreate('followups') || canCreate('proposals'))
+
   const roleName = normalizeName(userName)
   const pipelineTotal = mockPipeline.reduce((sum, stage) => sum + stage.count, 0)
 
-  const visibleQuickActions =
-    role === 'admin'
-      ? quickActions
-      : role === 'bd_intern'
-        ? quickActions.filter((action) => action.id === 'lead' || action.id === 'follow-up')
-        : []
+  const visibleQuickActions = quickActions.filter((action) => canCreate(action.module))
 
   const statCards = [
     { key: 'leads', label: 'Total leads', value: mockStats.totalLeads, trend: `+${mockStats.leadsAddedThisWeek} this week` },
@@ -113,50 +116,37 @@ export default function DashboardPage({ userName, role }: DashboardPageProps) {
     { key: 'followups', label: 'Follow-ups today', value: mockStats.followUpsToday, trend: `${mockStats.followUpsOverdue} overdue` },
   ]
 
-  const visibleStatCards =
-    role === 'admin'
-      ? statCards
-      : role === 'bd_intern'
-        ? statCards
-        : role === 'tech_intern'
-          ? statCards.filter((card) => card.key === 'clients' || card.key === 'proposals')
-          : statCards.filter((card) => card.key === 'leads' || card.key === 'clients')
+  const visibleStatCards = statCards.filter((card) => canView(card.key))
 
-  const todayFollowUps =
-    role === 'bd_intern'
-      ? mockTodayFollowUps.filter((item) => normalizeName(item.assigned) === roleName)
-      : mockTodayFollowUps
+  const todayFollowUps = shouldUsePersonalScope ? mockTodayFollowUps.filter((item) => normalizeName(item.assigned) === roleName) : mockTodayFollowUps
 
   const sortedFollowUps = [...todayFollowUps].sort((a, b) => Number(b.overdue) - Number(a.overdue))
 
-  const visibleActivity =
-    role === 'admin'
-      ? mockActivity
-      : role === 'viewer'
-        ? []
-        : mockActivity.filter((item) => normalizeName(item.actor) === roleName)
+  const showActivity = canView('team') && (canCreate('leads') || canCreate('followups') || canCreate('proposals'))
+  const visibleActivity = showActivity
+    ? shouldUsePersonalScope
+      ? mockActivity.filter((item) => normalizeName(item.actor) === roleName)
+      : mockActivity
+    : []
 
-  const visibleProposals =
-    role === 'admin'
-      ? mockProposals
-      : role === 'bd_intern'
-        ? mockProposals.filter((proposal) => normalizeName(proposalAssignee(proposal.id)) === roleName)
-        : []
+  const showProposals = canView('proposals') && canCreate('proposals')
+  const visibleProposals = showProposals
+    ? shouldUsePersonalScope
+      ? mockProposals.filter((proposal) => normalizeName(proposalAssignee(proposal.id)) === roleName)
+      : mockProposals
+    : []
 
-  const visibleUpcoming =
-    role === 'admin'
-      ? mockUpcoming
-      : role === 'bd_intern'
-        ? mockUpcoming.filter((item) => normalizeName(item.assigned) === roleName)
-        : []
+  const showFollowUps = canView('followups') && canCreate('followups')
+  const visibleUpcoming = showFollowUps
+    ? shouldUsePersonalScope
+      ? mockUpcoming.filter((item) => normalizeName(item.assigned) === roleName)
+      : mockUpcoming
+    : []
 
-  const showPipeline = role === 'admin' || role === 'bd_intern' || role === 'viewer'
-  const showFollowUps = role === 'admin' || role === 'bd_intern'
-  const showActivity = role !== 'viewer'
-  const showProposals = role === 'admin' || role === 'bd_intern'
-  const showTeam = role === 'admin'
-  const showFunnel = role === 'admin' || role === 'bd_intern'
-  const showUpcoming = role === 'admin' || role === 'bd_intern'
+  const showPipeline = canView('leads')
+  const showTeam = canView('team') && canCreate('team')
+  const showFunnel = canView('leads') && canView('proposals')
+  const showUpcoming = showFollowUps
 
   return (
     <div className="min-h-full space-y-6 bg-[#0a0a0a] px-4 py-5 font-['Geist','IBM_Plex_Sans','DM_Sans',ui-sans-serif,sans-serif] sm:px-6 sm:py-6 lg:space-y-8 lg:px-8 lg:py-7">

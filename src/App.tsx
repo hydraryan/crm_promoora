@@ -64,7 +64,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
         _id?: string
         id?: string
         name?: string
-        role?: 'admin' | 'bd_intern' | 'tech_intern' | 'viewer'
+        role?: Role
       }
     } catch (err) {
       console.error('❌ Failed to parse stored user:', err)
@@ -163,7 +163,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
         case 'conversion-report':
           return <ConversionReport />
         default:
-          return <DashboardPage userName={firstName} role={role} />
+          return <DashboardPage userName={firstName} />
       }
     }
 

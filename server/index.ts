@@ -2,6 +2,24 @@ import dotenv from 'dotenv'
 import { connectDatabase } from './config/db.js'
 import app from './app.js'
 
+const originalEmitWarning = process.emitWarning.bind(process)
+
+process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
+  const message = typeof warning === 'string' ? warning : warning.message
+  const codeFromWarning =
+    typeof warning === 'object' && warning !== null && 'code' in warning
+      ? String((warning as { code?: unknown }).code ?? '')
+      : ''
+  const codeFromArgs = typeof args[0] === 'string' ? args[0] : ''
+  const warningCode = codeFromWarning || codeFromArgs
+
+  if (warningCode === 'DEP0169' && message.includes('url.parse()')) {
+    return
+  }
+
+  ;(originalEmitWarning as (...emitArgs: unknown[]) => void)(warning, ...args)
+}) as typeof process.emitWarning
+
 // Load environment variables
 dotenv.config({ path: '.env.local' })
 
