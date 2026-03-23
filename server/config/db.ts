@@ -7,10 +7,6 @@ dotenv.config({ path: '.env.local' })
 const MONGODB_URI = process.env.MONGODB_URI
 const MONGODB_URI_FALLBACK = process.env.MONGODB_URI_FALLBACK
 
-if (!MONGODB_URI && !MONGODB_URI_FALLBACK) {
-  throw new Error('MONGODB_URI not found in environment variables')
-}
-
 const DNS_FALLBACK_SERVERS = ['8.8.8.8', '1.1.1.1']
 
 function isSrvDnsError(error: unknown) {
