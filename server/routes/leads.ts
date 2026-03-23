@@ -1,10 +1,10 @@
 import { Router, type Response } from 'express'
 import multer from 'multer'
-import { authenticateToken, type AuthRequest } from '../middleware/auth'
-import { Lead, type BusinessType, type LeadStage } from '../models/Lead'
-import { FollowUp } from '../models/FollowUp'
-import { Activity } from '../models/Activity'
-import { getAuthContext, isAdmin } from './_helpers'
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
+import { Lead, type BusinessType, type LeadStage } from '../models/Lead.js'
+import { FollowUp } from '../models/FollowUp.js'
+import { Activity } from '../models/Activity.js'
+import { getAuthContext, isAdmin } from './_helpers.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage() })

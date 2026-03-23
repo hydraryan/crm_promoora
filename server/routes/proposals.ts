@@ -1,11 +1,11 @@
 import { Router, type Response } from 'express'
 import { Types } from 'mongoose'
-import { authenticateToken, type AuthRequest } from '../middleware/auth'
-import { Lead } from '../models/Lead'
-import { Client } from '../models/Client'
-import { Proposal, PROPOSAL_STATUSES, type ProposalStatus } from '../models/Proposal'
-import { Activity } from '../models/Activity'
-import { getAuthContext, isAdmin } from './_helpers'
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
+import { Lead } from '../models/Lead.js'
+import { Client } from '../models/Client.js'
+import { Proposal, PROPOSAL_STATUSES, type ProposalStatus } from '../models/Proposal.js'
+import { Activity } from '../models/Activity.js'
+import { getAuthContext, isAdmin } from './_helpers.js'
 
 const router = Router()
 router.use(authenticateToken)

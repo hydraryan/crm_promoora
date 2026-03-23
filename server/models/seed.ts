@@ -1,5 +1,5 @@
-import { Role, IRole } from './Role'
-import { User, type IUser } from './User'
+import { Role, IRole } from './Role.js'
+import { User, type IUser } from './User.js'
 import bcrypt from 'bcrypt'
 
 /**

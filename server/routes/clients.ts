@@ -1,10 +1,10 @@
 import { Router, type Response } from 'express'
-import { authenticateToken, type AuthRequest } from '../middleware/auth'
-import { Activity } from '../models/Activity'
-import { BUSINESS_TYPES, CLIENT_STATUSES, Client, type ClientBusinessType, type ClientStatus } from '../models/Client'
-import { FollowUp } from '../models/FollowUp'
-import { Project } from '../models/Project'
-import { getAuthContext, isAdmin } from './_helpers'
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
+import { Activity } from '../models/Activity.js'
+import { BUSINESS_TYPES, CLIENT_STATUSES, Client, type ClientBusinessType, type ClientStatus } from '../models/Client.js'
+import { FollowUp } from '../models/FollowUp.js'
+import { Project } from '../models/Project.js'
+import { getAuthContext, isAdmin } from './_helpers.js'
 
 const router = Router()
 

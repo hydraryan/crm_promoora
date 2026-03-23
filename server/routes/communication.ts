@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
-import { authenticateToken, type AuthRequest } from '../middleware/auth'
-import { Activity, type ActivityOutcome } from '../models/Activity'
-import { getAuthContext } from './_helpers'
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
+import { Activity, type ActivityOutcome } from '../models/Activity.js'
+import { getAuthContext } from './_helpers.js'
 
 const router = Router()
 router.use(authenticateToken)

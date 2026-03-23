@@ -1,9 +1,9 @@
 import { Router, type Response } from 'express'
 import { Types } from 'mongoose'
-import { authenticateToken, type AuthRequest } from '../middleware/auth'
-import { Role, type IRole } from '../models/Role'
-import { User } from '../models/User'
-import { getAuthContext, isAdmin } from './_helpers'
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
+import { Role, type IRole } from '../models/Role.js'
+import { User } from '../models/User.js'
+import { getAuthContext, isAdmin } from './_helpers.js'
 
 const router = Router()
 router.use(authenticateToken)

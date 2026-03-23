@@ -1,5 +1,5 @@
-import { User } from '../models/User'
-import type { AuthRequest } from '../middleware/auth'
+import { User } from '../models/User.js'
+import type { AuthRequest } from '../middleware/auth.js'
 
 export interface AuthContext {
   userId: string

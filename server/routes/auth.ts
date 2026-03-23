@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from 'express'
-import { User } from '../models/User'
-import { UserSession } from '../models/UserSession'
-import { comparePassword, hashPassword } from '../models/seed'
-import { generateAccessToken, generateRefreshToken, authenticateToken, AuthRequest } from '../middleware/auth'
+import { User } from '../models/User.js'
+import { UserSession } from '../models/UserSession.js'
+import { comparePassword, hashPassword } from '../models/seed.js'
+import { generateAccessToken, generateRefreshToken, authenticateToken, AuthRequest } from '../middleware/auth.js'
 
 const router = Router()
 

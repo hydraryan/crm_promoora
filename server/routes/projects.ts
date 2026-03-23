@@ -1,9 +1,9 @@
 import { Router, type Response } from 'express'
-import { authenticateToken, type AuthRequest } from '../middleware/auth'
-import { Activity } from '../models/Activity'
-import { Client } from '../models/Client'
-import { PROJECT_STATUSES, Project, SERVICE_TYPES, type ProjectStatus, type ServiceType } from '../models/Project'
-import { getAuthContext, isAdmin } from './_helpers'
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
+import { Activity } from '../models/Activity.js'
+import { Client } from '../models/Client.js'
+import { PROJECT_STATUSES, Project, SERVICE_TYPES, type ProjectStatus, type ServiceType } from '../models/Project.js'
+import { getAuthContext, isAdmin } from './_helpers.js'
 
 const router = Router()
 
@@ -283,7 +283,7 @@ router.patch('/:id/tasks/:taskId', async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Not allowed to update tasks' })
     }
 
-    const task = project.tasks.id(req.params.taskId)
+    const task = project.tasks.find((item) => String(item._id) === String(req.params.taskId))
     if (!task) return res.status(404).json({ error: 'Task not found' })
 
     const updates = req.body as Partial<{ isDone: boolean; title: string; assignedTo: string; dueDate: string }>
@@ -327,10 +327,11 @@ router.delete('/:id/tasks/:taskId', async (req: AuthRequest, res: Response) => {
     const project = await Project.findById(req.params.id)
     if (!project) return res.status(404).json({ error: 'Project not found' })
 
-    const task = project.tasks.id(req.params.taskId)
+    const taskIndex = project.tasks.findIndex((item) => String(item._id) === String(req.params.taskId))
+    const task = taskIndex >= 0 ? project.tasks[taskIndex] : null
     if (!task) return res.status(404).json({ error: 'Task not found' })
 
-    task.deleteOne()
+    project.tasks.splice(taskIndex, 1)
     await project.save()
 
     const populated = await Project.findById(project._id)
