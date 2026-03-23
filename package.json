@@ -7,7 +7,8 @@
     "dev": "vite",
     "dev:server": "nodemon --exec tsx server/index.ts",
     "dev:full": "concurrently \"npm run dev\" \"npm run dev:server\"",
-    "build": "tsc -b && vite build",
+    "build:server": "tsc -p server/tsconfig.build.json",
+    "build": "npm run build:server && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed": "tsx server/seed-data.ts"

@@ -1,5 +1,5 @@
-import app from '../server/app.js'
-import { connectDatabase } from '../server/config/db.js'
+import app from '../server-dist/app.js'
+import { connectDatabase } from '../server-dist/config/db.js'
 
 let dbReady: Promise<unknown> | null = null
 
