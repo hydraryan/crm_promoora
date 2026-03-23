@@ -11,6 +11,19 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["./**/*.ts"],
-  "exclude": ["../node_modules", "../dist", "../server-dist"]
+  "include": [
+    "./app.ts",
+    "./config/**/*.ts",
+    "./middleware/**/*.ts",
+    "./models/**/*.ts",
+    "./routes/**/*.ts"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../dist",
+    "../server-dist",
+    "./index.ts",
+    "./seed-data.ts",
+    "./test-connection.ts"
+  ]
 }
