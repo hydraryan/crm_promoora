@@ -3,17 +3,17 @@
  * Run with: npx tsx server/seed-data.ts
  */
 import mongoose from 'mongoose'
-import { seedRoles, seedAdminUser, hashPassword } from './models/seed'
+import { seedRoles, seedAdminUser, hashPassword } from './models/seed.js'
 import dotenv from 'dotenv'
-import { Role } from './models/Role'
-import { User } from './models/User'
-import { Lead, type BusinessType, type LeadStage } from './models/Lead'
-import { FollowUp, type FollowUpType } from './models/FollowUp'
-import { Activity, type ActivityType } from './models/Activity'
-import { Client, type ClientBusinessType, type ClientStatus } from './models/Client'
-import { Project, type ProjectStatus, type ServiceType } from './models/Project'
-import { Proposal } from './models/Proposal'
-import { InvoiceModel } from './models/Invoice'
+import { Role } from './models/Role.js'
+import { User } from './models/User.js'
+import { Lead, type BusinessType, type LeadStage } from './models/Lead.js'
+import { FollowUp, type FollowUpType } from './models/FollowUp.js'
+import { Activity, type ActivityType } from './models/Activity.js'
+import { Client, type ClientBusinessType, type ClientStatus } from './models/Client.js'
+import { Project, type ProjectStatus, type ServiceType } from './models/Project.js'
+import { Proposal } from './models/Proposal.js'
+import { InvoiceModel } from './models/Invoice.js'
 
 // Load environment variables
 dotenv.config({ path: '.env.local' })

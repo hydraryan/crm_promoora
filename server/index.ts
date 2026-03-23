@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
-import { connectDatabase } from './config/db'
-import app from './app'
+import { connectDatabase } from './config/db.js'
+import app from './app.js'
 
 // Load environment variables
 dotenv.config({ path: '.env.local' })
