@@ -1,4 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 export interface IUser extends Document {
   _id: Types.ObjectId
@@ -7,6 +8,8 @@ export interface IUser extends Document {
   passwordHash: string
   phone?: string
   avatarInitials?: string
+  searchText: string
+  searchPrefixes: string[]
   roleId: Types.ObjectId
   status: 'active' | 'inactive' | 'suspended'
   isEmailVerified: boolean
@@ -53,6 +56,16 @@ const userSchema = new Schema<IUser>(
           .slice(0, 2)
       },
     },
+    searchText: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    searchPrefixes: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     roleId: {
       type: Schema.Types.ObjectId,
       ref: 'Role',
@@ -86,6 +99,13 @@ const userSchema = new Schema<IUser>(
 
 // Index for common queries
 userSchema.index({ email: 1, status: 1 })
+userSchema.index({ searchPrefixes: 1, status: 1 })
+
+userSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([this.name, this.email, this.phone])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 // Pre-save middleware to hash password (if not already hashed)
 // TODO: Implement bcrypt hashing in auth routes during backend setup

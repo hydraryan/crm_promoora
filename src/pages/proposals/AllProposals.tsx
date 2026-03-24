@@ -8,9 +8,10 @@ import ProposalPreview from './ProposalPreview'
 interface AllProposalsProps {
   defaultStatus?: ProposalStatus
   titleOverride?: string
+  openBuilderOnMount?: boolean
 }
 
-export default function AllProposals({ defaultStatus, titleOverride }: AllProposalsProps) {
+export default function AllProposals({ defaultStatus, titleOverride, openBuilderOnMount = false }: AllProposalsProps) {
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,6 +34,13 @@ export default function AllProposals({ defaultStatus, titleOverride }: AllPropos
   useEffect(() => {
     setStatusFilter(defaultStatus ?? '')
   }, [defaultStatus])
+
+  useEffect(() => {
+    if (openBuilderOnMount) {
+      setEditingProposal(null)
+      setShowBuilder(true)
+    }
+  }, [openBuilderOnMount])
 
   const refetch = async () => {
     setLoading(true)
@@ -188,7 +196,7 @@ export default function AllProposals({ defaultStatus, titleOverride }: AllPropos
                     }
                     setPreviewProposal(proposal)
                   }}
-                  className="group grid cursor-pointer grid-cols-[110px_1fr_180px_170px_220px_100px_32px] gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]"
+                  className="group grid cursor-pointer grid-cols-[110px_1fr_180px_170px_220px_100px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
                 >
                   <p className="self-center font-['Geist_Mono'] text-[11px] text-[#3f3f46]">{proposal.proposalNumber}</p>
                   <p className="self-center truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{proposal.title}</p>

@@ -11,6 +11,8 @@ import { Activity } from '../models/Activity.js'
 import { UserSession } from '../models/UserSession.js'
 import { hashPassword } from '../models/seed.js'
 import { getAuthContext, isAdmin } from './_helpers.js'
+import { createNotification } from '../services/notifications.js'
+import { sendWelcomeMemberEmail } from '../services/mailer.js'
 
 const router = Router()
 router.use(authenticateToken)
@@ -305,6 +307,19 @@ router.post('/members', async (req: AuthRequest, res: Response) => {
       existing.createdBy = auth.userId as any
       await existing.save()
 
+      const mailResult = await sendWelcomeMemberEmail(existing.email, existing.name, password)
+      if (!mailResult.sent) {
+        return res.status(500).json({ error: `Member created but welcome email failed: ${mailResult.reason ?? 'Unknown error'}` })
+      }
+
+      await createNotification({
+        userId: String(existing._id),
+        category: 'team',
+        title: 'Account Activated',
+        message: 'Your CRM account has been activated by admin',
+        actionUrl: '/team/list',
+      })
+
       const populatedExisting = await User.findById(existing._id).populate('roleId', 'name').select('name email phone avatarInitials roleId status isEmailVerified createdBy createdAt')
 
       return res.status(200).json({ member: serializeMember(populatedExisting) })
@@ -322,6 +337,19 @@ router.post('/members', async (req: AuthRequest, res: Response) => {
     })
 
     const populated = await User.findById(created._id).populate('roleId', 'name').select('name email phone avatarInitials roleId status isEmailVerified createdBy createdAt')
+
+    const mailResult = await sendWelcomeMemberEmail(created.email, created.name, password)
+    if (!mailResult.sent) {
+      return res.status(500).json({ error: `Member created but welcome email failed: ${mailResult.reason ?? 'Unknown error'}` })
+    }
+
+    await createNotification({
+      userId: String(created._id),
+      category: 'team',
+      title: 'Welcome to CRM Portal',
+      message: 'Your team account is ready. Sign in to start working.',
+      actionUrl: '/dashboard',
+    })
 
     return res.status(201).json({ member: serializeMember(populated) })
   } catch (error) {
@@ -359,6 +387,14 @@ router.post('/invite', async (req: AuthRequest, res: Response) => {
       status: 'inactive',
       isEmailVerified: false,
       createdBy: auth.userId,
+    })
+
+    await createNotification({
+      userId: auth.userId,
+      category: 'team',
+      title: 'Invitation Sent',
+      message: `${email.trim().toLowerCase()} invited as ${role}`,
+      actionUrl: '/team/list',
     })
 
     return res.status(201).json({
@@ -433,6 +469,14 @@ router.patch('/members/:id/deactivate', async (req: AuthRequest, res: Response) 
     user.status = 'inactive'
     await user.save()
 
+    await createNotification({
+      userId: String(user._id),
+      category: 'team',
+      title: 'Account Deactivated',
+      message: 'Your account was set to inactive by admin',
+      actionUrl: '/dashboard',
+    })
+
     const populated = await User.findById(user._id).populate('roleId', 'name').select('name email phone avatarInitials roleId status isEmailVerified createdBy createdAt')
 
     return res.json({ member: serializeMember(populated) })
@@ -456,6 +500,14 @@ router.patch('/members/:id/reactivate', async (req: AuthRequest, res: Response) 
 
     user.status = 'active'
     await user.save()
+
+    await createNotification({
+      userId: String(user._id),
+      category: 'team',
+      title: 'Account Reactivated',
+      message: 'Your account was reactivated by admin',
+      actionUrl: '/dashboard',
+    })
 
     const populated = await User.findById(user._id).populate('roleId', 'name').select('name email phone avatarInitials roleId status isEmailVerified createdBy createdAt')
 

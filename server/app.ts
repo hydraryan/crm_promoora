@@ -13,6 +13,8 @@ import proposalsRoutes from './routes/proposals.js'
 import { invoicesRouter } from './routes/invoices.js'
 import communicationRoutes from './routes/communication.js'
 import rolesRoutes from './routes/roles.js'
+import notificationsRoutes from './routes/notifications.js'
+import searchRoutes from './routes/search.js'
 
 const app = express()
 
@@ -37,6 +39,8 @@ app.use('/api/proposals', proposalsRoutes)
 app.use('/api/invoices', invoicesRouter)
 app.use('/api/communication', communicationRoutes)
 app.use('/api/roles', rolesRoutes)
+app.use('/api/notifications', notificationsRoutes)
+app.use('/api/search', searchRoutes)
 
 app.get('/api/health', (_req: express.Request, res: express.Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

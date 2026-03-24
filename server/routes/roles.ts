@@ -8,9 +8,10 @@ import { getAuthContext, isAdmin } from './_helpers.js'
 const router = Router()
 router.use(authenticateToken)
 
-const CRM_MODULES = ['leads', 'clients', 'projects', 'followups', 'proposals', 'invoicing', 'team', 'communication', 'reports', 'settings'] as const
+const CRM_MODULES = ['dashboard', 'leads', 'clients', 'projects', 'followups', 'proposals', 'invoicing', 'team', 'communication', 'reports', 'settings'] as const
 const ACTIONS = ['view', 'create', 'edit', 'delete'] as const
 const STORAGE_KEY_BY_MODULE: Record<CRMModule, string> = {
+  dashboard: 'dashboard',
   leads: 'leads',
   clients: 'clients',
   projects: 'projects',

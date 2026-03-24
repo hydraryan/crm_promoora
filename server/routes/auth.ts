@@ -1,10 +1,21 @@
 import { Router, type Request, type Response } from 'express'
+import crypto from 'node:crypto'
 import { User } from '../models/User.js'
 import { UserSession } from '../models/UserSession.js'
+import { PasswordResetOtp } from '../models/PasswordResetOtp.js'
 import { comparePassword, hashPassword } from '../models/seed.js'
 import { generateAccessToken, generateRefreshToken, authenticateToken, AuthRequest } from '../middleware/auth.js'
+import { sendPasswordResetOtpEmail } from '../services/mailer.js'
 
 const router = Router()
+
+function hashOtp(otp: string): string {
+  return crypto.createHash('sha256').update(otp).digest('hex')
+}
+
+function generateSixDigitOtp(): string {
+  return String(crypto.randomInt(100000, 1000000))
+}
 
 /**
  * POST /auth/login
@@ -211,6 +222,124 @@ router.post('/change-password', authenticateToken, async (req: AuthRequest, res:
 })
 
 /**
+ * POST /auth/forgot-password/request
+ * Sends 6-digit OTP valid for 5 minutes
+ */
+router.post('/forgot-password/request', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body as { email?: string }
+
+    if (!email?.trim()) {
+      return res.status(400).json({ error: 'Email is required' })
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const user = await User.findOne({ email: normalizedEmail }).select('name email status')
+
+    // Return generic success to avoid user enumeration.
+    if (!user || user.status !== 'active') {
+      return res.json({ success: true, message: 'If the account exists, OTP has been sent.' })
+    }
+
+    const otp = generateSixDigitOtp()
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+    await PasswordResetOtp.updateMany(
+      { email: normalizedEmail, usedAt: { $exists: false } },
+      { $set: { usedAt: new Date() } }
+    )
+
+    await PasswordResetOtp.create({
+      email: normalizedEmail,
+      otpHash: hashOtp(otp),
+      expiresAt,
+    })
+
+    const mail = await sendPasswordResetOtpEmail(user.email, user.name, otp)
+    if (!mail.sent) {
+      return res.status(500).json({ error: `Failed to send OTP email: ${mail.reason ?? 'Unknown error'}` })
+    }
+
+    return res.json({ success: true, message: 'OTP sent to your email. Valid for 5 minutes.' })
+  } catch (error) {
+    console.error('Forgot password request error:', error)
+    return res.status(500).json({ error: 'Failed to initiate password reset' })
+  }
+})
+
+/**
+ * POST /auth/forgot-password/verify
+ * Verifies OTP and updates password
+ */
+router.post('/forgot-password/verify', async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body as {
+      email?: string
+      otp?: string
+      newPassword?: string
+    }
+
+    if (!email?.trim() || !otp?.trim() || !newPassword) {
+      return res.status(400).json({ error: 'email, otp and newPassword are required' })
+    }
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      return res.status(400).json({ error: 'OTP must be 6 digits' })
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' })
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const otpHash = hashOtp(otp.trim())
+    const now = new Date()
+
+    const otpRecord = await PasswordResetOtp.findOne({
+      email: normalizedEmail,
+      otpHash,
+      usedAt: { $exists: false },
+      expiresAt: { $gt: now },
+    }).sort({ createdAt: -1 })
+
+    if (!otpRecord) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' })
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash')
+    if (!user || user.status !== 'active') {
+      return res.status(400).json({ error: 'Invalid account state for password reset' })
+    }
+
+    user.passwordHash = await hashPassword(newPassword)
+    user.passwordChangedAt = new Date()
+    await user.save()
+
+    otpRecord.usedAt = new Date()
+    await otpRecord.save()
+
+    await UserSession.updateMany(
+      {
+        userId: user._id,
+        $or: [{ logoutAt: { $exists: false } }, { logoutAt: null }],
+      },
+      {
+        $set: {
+          logoutAt: new Date(),
+          lastActiveAt: new Date(),
+          expiresAt: new Date(),
+        },
+      }
+    )
+
+    return res.json({ success: true, message: 'Password reset successful. Please login again.' })
+  } catch (error) {
+    console.error('Forgot password verify error:', error)
+    return res.status(500).json({ error: 'Failed to reset password' })
+  }
+})
+
+/**
  * GET /auth/me
  * Get current user and their permission matrix
  */
@@ -228,7 +357,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
     const roleDoc = (user.roleId as any)
 
     const toMatrix = (role: any) => {
-      const CRM_MODULES = ['leads', 'clients', 'projects', 'followups', 'proposals', 'invoicing', 'team', 'communication', 'reports', 'settings'] as const
+      const CRM_MODULES = ['dashboard', 'leads', 'clients', 'projects', 'followups', 'proposals', 'invoicing', 'team', 'communication', 'reports', 'settings'] as const
       const ACTIONS = ['view', 'create', 'edit', 'delete'] as const
       const result = Object.fromEntries(
         CRM_MODULES.map((m) => [m, { view: false, create: false, edit: false, delete: false }]),

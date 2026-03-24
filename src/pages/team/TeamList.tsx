@@ -107,7 +107,7 @@ export default function TeamList({ role, currentUserId, defaultRole, titleOverri
           <div
             key={member._id}
             onClick={() => onOpenMember(member._id)}
-            className={`group grid cursor-pointer gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a] ${
+            className={`group grid cursor-pointer gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0 ${
               role === 'admin' ? 'grid-cols-[1fr_140px_160px_120px_80px_32px]' : 'grid-cols-[1fr_140px_32px]'
             }`}
           >

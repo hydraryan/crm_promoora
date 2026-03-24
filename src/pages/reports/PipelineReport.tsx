@@ -170,7 +170,7 @@ export default function PipelineReport({ role }: { role: Role }) {
 
           <div className="space-y-px">
             {safeData.stagnant.map((lead) => (
-              <div key={lead._id} className="grid grid-cols-[1fr_150px_180px_90px] items-center gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+              <div key={lead._id} className="grid grid-cols-[1fr_150px_180px_90px] items-center gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0">
                 <p className="text-[13px] text-[#a1a1aa]">{lead.businessName}</p>
                 <p className="text-[12px] text-[#71717a]">{lead.stage}</p>
                 <div className="flex items-center gap-2">

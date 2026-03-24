@@ -93,3 +93,42 @@ body {
 .animate-fadeUp {
   animation: fadeUp 0.35s ease forwards;
 }
+
+/*
+  Global readability overrides for low-contrast text utility colors used across pages.
+  This keeps hierarchy while preventing text from appearing faded on the dark UI.
+*/
+.text-\[\#2a2a2a\] {
+  color: #8a8a96 !important;
+}
+
+.text-\[\#3f3f46\] {
+  color: #9595a3 !important;
+}
+
+.text-\[\#404040\] {
+  color: #9898a6 !important;
+}
+
+.text-\[\#52525b\] {
+  color: #adadbb !important;
+}
+
+.text-\[\#71717a\] {
+  color: #c0c0cd !important;
+}
+
+.text-\[\#a1a1aa\] {
+  color: #d9d9e2 !important;
+}
+
+.placeholder\:text-\[\#3f3f46\]::placeholder,
+.placeholder\:text-\[\#52525b\]::placeholder {
+  color: #8f8f9d !important;
+}
+
+.hover\:text-\[\#52525b\]:hover,
+.hover\:text-\[\#a1a1aa\]:hover,
+.hover\:text-\[\#fafafa\]:hover {
+  color: #ececf2 !important;
+}

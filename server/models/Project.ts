@@ -1,4 +1,5 @@
 import { Schema, model, type Document, Types } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 export const PROJECT_STATUSES = ['In progress', 'Under review', 'Completed', 'On hold'] as const
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
@@ -30,6 +31,8 @@ export interface IProject extends Document {
   progress: number
   tasks: IProjectTask[]
   notes?: string
+  searchText: string
+  searchPrefixes: string[]
   createdBy: Types.ObjectId
   createdAt: Date
   updatedAt: Date
@@ -128,6 +131,16 @@ const projectSchema = new Schema<IProject>(
       type: String,
       trim: true,
     },
+    searchText: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    searchPrefixes: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -142,5 +155,20 @@ const projectSchema = new Schema<IProject>(
 
 projectSchema.index({ status: 1, serviceType: 1 })
 projectSchema.index({ createdAt: -1 })
+projectSchema.index({ searchPrefixes: 1, createdBy: 1 })
+projectSchema.index({ searchPrefixes: 1, assignedTo: 1 })
+
+projectSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([
+    this.title,
+    this.description,
+    this.serviceType,
+    this.status,
+    this.notes,
+    this.tasks?.map((task) => task.title).join(' '),
+  ])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 export const Project = model<IProject>('Project', projectSchema)

@@ -1,4 +1,5 @@
 import { Schema, model, type Document, Types } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 export const PROPOSAL_STATUSES = ['Draft', 'Sent', 'Awaiting response', 'Accepted', 'Rejected'] as const
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
@@ -29,6 +30,8 @@ export interface IProposal extends Document {
   serviceBlocks: IProposalServiceBlock[]
   milestones: IProposalMilestone[]
   notes?: string
+  searchText: string
+  searchPrefixes: string[]
   createdBy: Types.ObjectId
   sentAt?: Date
   acceptedAt?: Date
@@ -108,6 +111,16 @@ const proposalSchema = new Schema<IProposal>(
       type: String,
       trim: true,
     },
+    searchText: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    searchPrefixes: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -135,5 +148,19 @@ const proposalSchema = new Schema<IProposal>(
 
 proposalSchema.index({ status: 1, createdAt: -1 })
 proposalSchema.index({ createdBy: 1, createdAt: -1 })
+proposalSchema.index({ searchPrefixes: 1, createdBy: 1 })
+
+proposalSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([
+    this.proposalNumber,
+    this.title,
+    this.notes,
+    this.rejectionReason,
+    this.status,
+    this.serviceBlocks?.map((block) => `${block.title} ${block.description}`).join(' '),
+  ])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 export const Proposal = model<IProposal>('Proposal', proposalSchema)

@@ -1,4 +1,5 @@
 import { Schema, model, type Document, Types } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 export type LeadStage =
   | 'Cold'
@@ -21,6 +22,8 @@ export interface ILead extends Document {
   stage: LeadStage
   source?: 'walk_in' | 'referral' | 'instagram' | 'cold_call' | 'other'
   notes?: string
+  searchText: string
+  searchPrefixes: string[]
   nextFollowupAt?: Date
   assignedTo: Types.ObjectId
   createdBy: Types.ObjectId
@@ -73,6 +76,16 @@ const leadSchema = new Schema<ILead>(
       type: String,
       trim: true,
     },
+    searchText: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    searchPrefixes: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     nextFollowupAt: {
       type: Date,
     },
@@ -101,5 +114,13 @@ const leadSchema = new Schema<ILead>(
 
 leadSchema.index({ stage: 1, assignedTo: 1 })
 leadSchema.index({ createdAt: -1 })
+leadSchema.index({ searchPrefixes: 1, assignedTo: 1 })
+leadSchema.index({ searchPrefixes: 1, createdBy: 1 })
+
+leadSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([this.businessName, this.ownerName, this.phone, this.email, this.notes])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 export const Lead = model<ILead>('Lead', leadSchema)

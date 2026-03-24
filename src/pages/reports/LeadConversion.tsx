@@ -163,7 +163,7 @@ export default function LeadConversion({ role }: { role: Role }) {
 
           <div className="space-y-px">
             {safeData.sourceBreakdown.map((source, i) => (
-              <div key={source.source} className="grid grid-cols-[1fr_80px_120px] items-center rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+              <div key={source.source} className="grid grid-cols-[1fr_80px_120px] items-center rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0">
                 <div className="flex items-center gap-2">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
                   <p className="text-[12px] capitalize text-[#a1a1aa]">{source.source.replace('_', ' ')}</p>

@@ -6,6 +6,7 @@ export interface IRole extends Document {
   label: string
   color?: string
   permissions: {
+    dashboard: string[]
     leads: string[]
     clients: string[]
     projects: string[]
@@ -51,6 +52,7 @@ const roleSchema = new Schema<IRole>(
     permissions: {
       type: {
         leads: [String],
+        dashboard: [String],
         clients: [String],
         projects: [String],
         followups: [String],
@@ -65,6 +67,7 @@ const roleSchema = new Schema<IRole>(
       required: true,
       default: {
         leads: [],
+        dashboard: [],
         clients: [],
         projects: [],
         followups: [],

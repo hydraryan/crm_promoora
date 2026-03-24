@@ -3,6 +3,7 @@ import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
 import { FollowUp } from '../models/FollowUp.js'
 import { Activity } from '../models/Activity.js'
 import { getAuthContext, isAdmin } from './_helpers.js'
+import { createNotification } from '../services/notifications.js'
 
 const router = Router()
 
@@ -210,6 +211,14 @@ router.patch('/:id/done', async (req: AuthRequest, res: Response) => {
       meta: {
         followupType: normalizeType(followup.type),
       },
+    })
+
+    await createNotification({
+      userId: String(followup.createdBy),
+      category: 'followup',
+      title: nextState ? 'Follow-up Completed' : 'Follow-up Reopened',
+      message: `${followup.businessName} follow-up was ${nextState ? 'completed' : 'reopened'}`,
+      actionUrl: '/followups/today',
     })
 
     return res.json({ success: true, isDone: followup.isDone, completedAt: followup.doneAt })

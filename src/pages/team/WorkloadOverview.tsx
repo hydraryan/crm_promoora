@@ -121,7 +121,7 @@ export default function WorkloadOverview({ role, currentUserId, onOpenMember }: 
           <div
             key={item.member._id}
             onClick={() => onOpenMember(item.member._id)}
-            className="group grid cursor-pointer grid-cols-[1fr_120px_120px_130px_120px_120px] gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]"
+            className="group grid cursor-pointer grid-cols-[1fr_120px_120px_130px_120px_120px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex size-6 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${roleColors[item.member.role]}20` }}>

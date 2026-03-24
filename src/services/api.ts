@@ -107,6 +107,46 @@ export const logoutUser = async (accessToken: string): Promise<void> => {
 }
 
 /**
+ * Request password reset OTP via email
+ */
+export const requestPasswordResetOtp = async (email: string): Promise<{ success: boolean; message?: string }> => {
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password/request`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email }),
+  })
+
+  if (!response.ok) {
+    const error = (await response.json()) as ApiError
+    throw new Error(error.error || 'Failed to send OTP')
+  }
+
+  return response.json()
+}
+
+/**
+ * Verify OTP and set new password
+ */
+export const resetPasswordWithOtp = async (email: string, otp: string, newPassword: string): Promise<{ success: boolean; message?: string }> => {
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password/verify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, otp, newPassword }),
+  })
+
+  if (!response.ok) {
+    const error = (await response.json()) as ApiError
+    throw new Error(error.error || 'Failed to reset password')
+  }
+
+  return response.json()
+}
+
+/**
  * Generate a unique device ID for multi-device session management
  */
 function generateDeviceId(): string {

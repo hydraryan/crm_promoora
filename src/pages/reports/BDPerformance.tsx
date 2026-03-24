@@ -154,7 +154,7 @@ export default function BDPerformance({ role }: { role: Role }) {
         {[...safeData.members]
           .sort((a, b) => b.dealsWon - a.dealsWon)
           .map((member, index) => (
-            <div key={member._id} className="grid grid-cols-[1fr_100px_120px_120px_110px_130px] items-center gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+            <div key={member._id} className="grid grid-cols-[1fr_100px_120px_120px_110px_130px] items-center gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0">
               <div className="flex items-center gap-3">
                 <span className="w-4 font-['Geist_Mono'] text-[11px] text-[#3f3f46]">{index + 1}</span>
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1a1a1a]">

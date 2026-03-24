@@ -1,4 +1,5 @@
 import { Schema, model, type Document, Types } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 export type FollowUpType = 'Phone call' | 'Walk-in' | 'WhatsApp' | 'call' | 'walk-in' | 'whatsapp'
 export type FollowUpTargetType = 'lead' | 'client'
@@ -12,6 +13,8 @@ export interface IFollowUp extends Document {
   ownerName: string
   type: FollowUpType
   note?: string
+  searchText: string
+  searchPrefixes: string[]
   assignedTo: Types.ObjectId
   dueAt: Date
   isDone: boolean
@@ -59,6 +62,16 @@ const followUpSchema = new Schema<IFollowUp>(
       type: String,
       trim: true,
     },
+    searchText: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    searchPrefixes: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     assignedTo: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -92,5 +105,12 @@ const followUpSchema = new Schema<IFollowUp>(
 
 followUpSchema.index({ assignedTo: 1, dueAt: 1, isDone: 1 })
 followUpSchema.index({ targetType: 1, leadId: 1, clientId: 1 })
+followUpSchema.index({ searchPrefixes: 1, assignedTo: 1 })
+
+followUpSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([this.businessName, this.ownerName, this.note, this.type])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 export const FollowUp = model<IFollowUp>('FollowUp', followUpSchema)

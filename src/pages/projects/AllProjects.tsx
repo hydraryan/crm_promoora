@@ -262,7 +262,7 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
         <div
           key={project._id}
           onClick={() => setSelectedProjectId(project._id)}
-          className="group grid cursor-pointer grid-cols-[1fr_180px_150px_130px_120px_90px_32px] gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]"
+          className="group grid cursor-pointer grid-cols-[1fr_180px_150px_130px_120px_90px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
         >
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: priorityColors[project.priority] }} />

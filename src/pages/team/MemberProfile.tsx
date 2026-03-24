@@ -147,10 +147,14 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
   return (
     <div className="min-h-full bg-[#0a0a0a]">
       <div className="flex items-center justify-between border-b border-[#1f1f1f] px-8 py-4">
-        <button onClick={onBack} className="flex items-center gap-2 text-[#52525b] transition-colors hover:text-[#a1a1aa]">
-          <ArrowLeft size={15} />
-          <span className="text-[13px]">Team</span>
-        </button>
+        {role === 'admin' ? (
+          <button onClick={onBack} className="flex items-center gap-2 text-[#52525b] transition-colors hover:text-[#a1a1aa]">
+            <ArrowLeft size={15} />
+            <span className="text-[13px]">Team</span>
+          </button>
+        ) : (
+          <div />
+        )}
 
         {role === 'admin' && member._id !== currentUserId && (
           <div className="flex items-center gap-2">

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
-import { Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { loginUser, storeTokens, storeUser } from '@/services/api'
+import { loginUser, requestPasswordResetOtp, resetPasswordWithOtp, storeTokens, storeUser } from '@/services/api'
 
 interface PupilProps {
   size?: number
@@ -180,6 +180,15 @@ function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isForgotFlow, setIsForgotFlow] = useState(false)
+  const [forgotStep, setForgotStep] = useState<'request' | 'verify'>('request')
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotOtp, setForgotOtp] = useState('')
+  const [forgotPassword, setForgotPassword] = useState('')
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('')
+  const [forgotInfo, setForgotInfo] = useState('')
+  const [forgotError, setForgotError] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
   const [failedAttempts, setFailedAttempts] = useState(0)
   const [lockUntil, setLockUntil] = useState<number | null>(null)
   const [remainingSeconds, setRemainingSeconds] = useState(0)
@@ -362,6 +371,64 @@ function LoginPage({ onAuthenticated }: LoginPageProps) {
     }
   }
 
+  const handleRequestOtp = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!forgotEmail.trim()) {
+      setForgotError('Email is required')
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotError('')
+    setForgotInfo('')
+    try {
+      const response = await requestPasswordResetOtp(forgotEmail.trim())
+      setForgotInfo(response.message ?? 'OTP sent to your email. Valid for 5 minutes.')
+      setForgotStep('verify')
+    } catch (err) {
+      setForgotError(err instanceof Error ? err.message : 'Failed to send OTP')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault()
+
+    if (!/^\d{6}$/.test(forgotOtp.trim())) {
+      setForgotError('OTP must be 6 digits')
+      return
+    }
+
+    if (forgotPassword.length < 8) {
+      setForgotError('New password must be at least 8 characters')
+      return
+    }
+
+    if (forgotPassword !== forgotConfirmPassword) {
+      setForgotError('Passwords do not match')
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotError('')
+    setForgotInfo('')
+    try {
+      const response = await resetPasswordWithOtp(forgotEmail.trim(), forgotOtp.trim(), forgotPassword)
+      setForgotInfo(response.message ?? 'Password reset successful. Please login with your new password.')
+      setIsForgotFlow(false)
+      setForgotStep('request')
+      setForgotOtp('')
+      setForgotPassword('')
+      setForgotConfirmPassword('')
+      setPassword('')
+    } catch (err) {
+      setForgotError(err instanceof Error ? err.message : 'Failed to reset password')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       <div className="relative hidden lg:flex flex-col justify-between bg-linear-to-br from-primary/90 via-primary to-primary/80 p-12 text-primary-foreground">
@@ -371,11 +438,14 @@ function LoginPage({ onAuthenticated }: LoginPageProps) {
           className="absolute inset-0 h-full w-full object-cover opacity-15"
         />
         <div className="relative z-20">
-          <div className="flex items-center gap-2 text-lg font-semibold">
-            <div className="size-8 rounded-lg bg-primary-foreground/10 backdrop-blur-sm flex items-center justify-center">
-              <Sparkles className="size-4" />
+          <div className="flex items-center">
+            <div className="flex h-12 w-64 items-center justify-center">
+              <img
+                src="/logos/promoora-crm-compact.svg"
+                alt="Promoora"
+                className="h-10 w-auto object-contain object-center"
+              />
             </div>
-            <span>CRM Secure</span>
           </div>
         </div>
 
@@ -619,11 +689,14 @@ function LoginPage({ onAuthenticated }: LoginPageProps) {
 
       <div className="flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-105">
-          <div className="lg:hidden flex items-center justify-center gap-2 text-lg font-semibold mb-12">
-            <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Sparkles className="size-4 text-primary" />
+          <div className="lg:hidden flex items-center justify-center mb-12">
+            <div className="flex h-12 w-64 items-center justify-center">
+              <img
+                src="/logos/promoora-crm-compact.svg"
+                alt="Promoora"
+                className="h-10 w-auto object-contain object-center"
+              />
             </div>
-            <span>CRM Secure</span>
           </div>
 
           <div className="text-center mb-10">
@@ -636,77 +709,204 @@ function LoginPage({ onAuthenticated }: LoginPageProps) {
             <span>Three failed attempts trigger a 60 second lockout.</span>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="ceo@promoora.in"
-                value={email}
-                autoComplete="off"
-                onChange={(e) => setEmail(e.target.value)}
-                onFocus={() => setIsTyping(true)}
-                onBlur={() => setIsTyping(false)}
-                required
-                className="h-12 bg-background border-border/60 focus:border-primary"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">
-                Password
-              </Label>
-              <div className="relative">
+          {!isForgotFlow ? (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </Label>
                 <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="ceo@promoora.in"
+                  value={email}
+                  autoComplete="off"
+                  onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setIsTyping(true)}
+                  onBlur={() => setIsTyping(false)}
                   required
-                  className="h-12 pr-10 bg-background border-border/60 focus:border-primary"
+                  className="h-12 bg-background border-border/60 focus:border-primary"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="h-12 pr-10 bg-background border-border/60 focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="remember" />
+                  <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                    Remember for 30 days
+                  </Label>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-sm text-primary hover:underline font-medium"
+                  onClick={() => {
+                    setIsForgotFlow(true)
+                    setForgotStep('request')
+                    setForgotEmail(email)
+                    setForgotError('')
+                    setForgotInfo('')
+                  }}
                 >
-                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                  Forgot password?
                 </button>
               </div>
+
+              {error && (
+                <div className="p-3 text-sm text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg">
+                  {error}
+                </div>
+              )}
+
+              {isLocked && (
+                <div className="p-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg dark:text-amber-300 dark:bg-amber-950/20 dark:border-amber-900/40">
+                  Locked. Try again in {remainingSeconds} second{remainingSeconds === 1 ? '' : 's'}.
+                </div>
+              )}
+
+              <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={isLoading || isLocked}>
+                {isLoading ? 'Verifying...' : isLocked ? 'Access Locked' : 'Log in'}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Reset password using OTP</p>
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline"
+                  onClick={() => {
+                    setIsForgotFlow(false)
+                    setForgotError('')
+                    setForgotInfo('')
+                  }}
+                >
+                  Back to login
+                </button>
+              </div>
+
+              {forgotStep === 'request' ? (
+                <form onSubmit={handleRequestOtp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email" className="text-sm font-medium">
+                      Registered email
+                    </Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="member@promoora.in"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      required
+                      className="h-12 bg-background border-border/60 focus:border-primary"
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={forgotLoading}>
+                    {forgotLoading ? 'Sending OTP...' : 'Send 6-digit OTP'}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-otp" className="text-sm font-medium">
+                      6-digit OTP
+                    </Label>
+                    <Input
+                      id="forgot-otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="123456"
+                      value={forgotOtp}
+                      onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      required
+                      className="h-12 bg-background border-border/60 focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-new-password" className="text-sm font-medium">
+                      New password
+                    </Label>
+                    <Input
+                      id="forgot-new-password"
+                      type="password"
+                      placeholder="Minimum 8 characters"
+                      value={forgotPassword}
+                      onChange={(e) => setForgotPassword(e.target.value)}
+                      required
+                      className="h-12 bg-background border-border/60 focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-confirm-password" className="text-sm font-medium">
+                      Confirm new password
+                    </Label>
+                    <Input
+                      id="forgot-confirm-password"
+                      type="password"
+                      placeholder="Re-enter new password"
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                      required
+                      className="h-12 bg-background border-border/60 focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      className="text-sm text-primary hover:underline"
+                      onClick={() => setForgotStep('request')}
+                    >
+                      Resend OTP
+                    </button>
+                    <p className="text-xs text-muted-foreground">OTP valid for 5 minutes</p>
+                  </div>
+
+                  <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={forgotLoading}>
+                    {forgotLoading ? 'Resetting...' : 'Reset password'}
+                  </Button>
+                </form>
+              )}
+
+              {forgotInfo && (
+                <div className="rounded-lg border border-emerald-300 bg-emerald-100 p-3 text-sm text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  {forgotInfo}
+                </div>
+              )}
+              {forgotError && (
+                <div className="rounded-lg border border-red-300 bg-red-100 p-3 text-sm text-red-900 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-200">
+                  {forgotError}
+                </div>
+              )}
             </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="remember" />
-                <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
-                  Remember for 30 days
-                </Label>
-              </div>
-              <a href="#" className="text-sm text-primary hover:underline font-medium">
-                Forgot password?
-              </a>
-            </div>
-
-            {error && (
-              <div className="p-3 text-sm text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg">
-                {error}
-              </div>
-            )}
-
-            {isLocked && (
-              <div className="p-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg dark:text-amber-300 dark:bg-amber-950/20 dark:border-amber-900/40">
-                Locked. Try again in {remainingSeconds} second{remainingSeconds === 1 ? '' : 's'}.
-              </div>
-            )}
-
-            <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={isLoading || isLocked}>
-              {isLoading ? 'Verifying...' : isLocked ? 'Access Locked' : 'Log in'}
-            </Button>
-          </form>
+          )}
         </div>
       </div>
     </div>

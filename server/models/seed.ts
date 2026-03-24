@@ -20,6 +20,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
         name: 'admin',
         label: 'Administrator',
         permissions: {
+          dashboard: ['read'],
           leads: ['create', 'read', 'update', 'delete', 'assign'],
           clients: ['read'],
           projects: ['read'],
@@ -38,6 +39,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
         name: 'bd_intern',
         label: 'BD Intern',
         permissions: {
+          dashboard: ['read'],
           leads: ['create', 'read', 'update'],
           clients: ['read'],
           projects: ['read'],
@@ -56,6 +58,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
         name: 'tech_intern',
         label: 'Tech Intern',
         permissions: {
+          dashboard: ['read'],
           leads: ['read'],
           clients: ['read'],
           projects: ['read'],
@@ -74,6 +77,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
         name: 'viewer',
         label: 'Viewer',
         permissions: {
+          dashboard: ['read'],
           leads: ['read'],
           clients: ['read'],
           projects: ['read'],

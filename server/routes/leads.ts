@@ -4,7 +4,9 @@ import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
 import { Lead, type BusinessType, type LeadStage } from '../models/Lead.js'
 import { FollowUp } from '../models/FollowUp.js'
 import { Activity } from '../models/Activity.js'
+import { User } from '../models/User.js'
 import { getAuthContext, isAdmin } from './_helpers.js'
+import { createNotification } from '../services/notifications.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage() })
@@ -269,6 +271,17 @@ router.post('/:id/followups', async (req: AuthRequest, res: Response) => {
       targetId: lead._id.toString(),
     })
 
+    const assignedId = String(assignedTo || lead.assignedTo)
+    if (assignedId) {
+      await createNotification({
+        userId: assignedId,
+        category: 'followup',
+        title: 'New Follow-up Assigned',
+        message: `${lead.businessName} follow-up is scheduled for ${new Date(dueAt).toLocaleString()}`,
+        actionUrl: '/followups/today',
+      })
+    }
+
     return res.status(201).json({
       followup: {
         _id: followup._id.toString(),
@@ -447,6 +460,17 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       targetId: lead._id.toString(),
     })
 
+    const assignedUserDoc = await User.findById(assignedUser).select('_id')
+    if (assignedUserDoc) {
+      await createNotification({
+        userId: String(assignedUserDoc._id),
+        category: 'lead',
+        title: 'New Lead Assigned',
+        message: `${lead.businessName} was assigned to you`,
+        actionUrl: '/leads/all',
+      })
+    }
+
     const populated = await Lead.findById(lead._id).populate('assignedTo', 'name avatarInitials')
 
     return res.status(201).json({ lead: serializeLead(populated) })
@@ -465,6 +489,8 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     if (!lead) return res.status(404).json({ error: 'Lead not found' })
 
     const previousStage = lead.stage
+    const previousAssignedUserId = assignedToId(lead)
+    const changedFields: string[] = []
 
     if (!isAdmin(auth.roleName) && createdById(lead) !== auth.userId) {
       return res.status(403).json({ error: 'Not allowed to update this lead' })
@@ -491,6 +517,8 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       if (key === 'stage' && !STAGES.includes(value as LeadStage)) continue
       if (key === 'businessType' && !BUSINESS_TYPES.includes(value as BusinessType)) continue
       if (key === 'source' && value && !SOURCES.includes(value as LeadSource)) continue
+
+      changedFields.push(String(key))
 
       if (key === 'nextFollowupAt') {
         ;(lead as any)[key] = value ? new Date(value as string) : undefined
@@ -520,6 +548,27 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
           }
         : undefined,
     })
+
+    const assignedUserId = assignedToId(lead)
+    const wasReassigned = Boolean(previousAssignedUserId && assignedUserId && previousAssignedUserId !== assignedUserId)
+    if (assignedUserId && assignedUserId !== auth.userId) {
+      const summaryFields = changedFields
+        .filter((field) => field !== 'notes')
+        .slice(0, 3)
+        .join(', ')
+
+      await createNotification({
+        userId: assignedUserId,
+        category: 'lead',
+        title: wasReassigned ? 'New Lead Assigned' : 'Lead Updated',
+        message: wasReassigned
+          ? `${lead.businessName} has now been assigned to you`
+          : summaryFields
+              ? `${lead.businessName} was updated (${summaryFields})`
+              : `${lead.businessName} was updated`,
+        actionUrl: '/leads/all',
+      })
+    }
 
     const populated = await Lead.findById(lead._id).populate('assignedTo', 'name avatarInitials')
     return res.json({ lead: serializeLead(populated) })

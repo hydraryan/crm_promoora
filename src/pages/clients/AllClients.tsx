@@ -209,7 +209,7 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
         <div
           key={client._id}
           onClick={() => setSelectedClientId(client._id)}
-          className="group grid cursor-pointer grid-cols-[1fr_160px_120px_150px_140px_90px_32px] gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]"
+          className="group grid cursor-pointer grid-cols-[1fr_160px_120px_150px_140px_90px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
         >
           <div className="min-w-0">
             <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{client.businessName}</p>
@@ -253,7 +253,7 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
           <p className="mb-4 text-[13px] font-medium text-[#a1a1aa]">Onboarding progress</p>
           <div className="space-y-px">
             {filteredClients.map((client) => (
-              <div key={client._id} className="flex items-center gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+              <div key={client._id} className="flex items-center gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0">
                 <p className="flex-1 truncate text-[13px] text-[#a1a1aa]">{client.businessName}</p>
 
                 <div className="flex items-center gap-1">

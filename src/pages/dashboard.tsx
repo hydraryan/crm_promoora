@@ -4,6 +4,7 @@ import { usePermissions } from '@/context/PermissionContext'
 
 interface DashboardPageProps {
   userName: string
+  onQuickAction?: (actionId: 'lead' | 'follow-up' | 'proposal' | 'client') => void
 }
 
 const mockStats = {
@@ -95,7 +96,7 @@ function proposalAssignee(id: number): string {
   return assignmentOrder[(id - 1) % assignmentOrder.length]
 }
 
-export default function DashboardPage({ userName }: DashboardPageProps) {
+export default function DashboardPage({ userName, onQuickAction }: DashboardPageProps) {
   const { permissions } = usePermissions()
 
   const canView = (module: string) => Boolean(permissions?.[module]?.view)
@@ -162,6 +163,7 @@ export default function DashboardPage({ userName }: DashboardPageProps) {
               <button
                 key={action.id}
                 type="button"
+                onClick={() => onQuickAction?.(action.id)}
                 className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-[#71717a] transition-all duration-150 hover:bg-[#1a1a1a] hover:text-[#fafafa]"
               >
                 <Plus size={13} />

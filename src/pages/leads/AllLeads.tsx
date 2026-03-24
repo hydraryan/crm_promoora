@@ -256,7 +256,7 @@ export default function AllLeads({
           <div
             key={lead._id}
             onClick={() => setSelectedLeadId(lead._id)}
-            className="group grid cursor-pointer grid-cols-[1fr_160px_150px_140px_100px_32px] gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]"
+            className="group grid cursor-pointer grid-cols-[1fr_160px_150px_140px_100px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
           >
             <div className="min-w-0">
               <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{lead.businessName}</p>

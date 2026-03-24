@@ -503,7 +503,10 @@ export function PromoosaSidebar({
     if (permissionCtx) {
       // Use permission context if available
       const isDisabled = permissionCtx.disabledModules.includes(section)
-      const hasPermission = permissionCtx.permissions?.[section as keyof typeof permissionCtx.permissions]?.view ?? false
+      const hasPermission =
+        section === 'dashboard'
+          ? (permissionCtx.permissions?.dashboard?.view ?? true)
+          : (permissionCtx.permissions?.[section as keyof typeof permissionCtx.permissions]?.view ?? false)
       return !isDisabled && hasPermission
     }
     // Fall back to role-based access
@@ -602,10 +605,6 @@ export function PromoosaSidebar({
                 <Settings size={18} />
               </button>
             )}
-
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600">
-              <span className="text-xs font-semibold text-white">AS</span>
-            </div>
           </div>
         </div>
 

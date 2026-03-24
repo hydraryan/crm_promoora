@@ -178,7 +178,7 @@ export default function FollowupCompletion({ role }: { role: Role }) {
         {[...safeData.byMember]
           .sort((a, b) => b.completionRate - a.completionRate)
           .map((member) => (
-            <div key={member._id} className="grid grid-cols-[1fr_100px_110px_100px_130px] items-center gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+            <div key={member._id} className="grid grid-cols-[1fr_100px_110px_100px_130px] items-center gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0">
               <div className="flex items-center gap-2">
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1a1a1a]">
                   <span className="text-[8px] text-[#71717a]">{member.initials}</span>

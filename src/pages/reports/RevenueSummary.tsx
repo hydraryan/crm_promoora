@@ -171,7 +171,7 @@ export default function RevenueSummary({ role }: { role: Role }) {
           <p className="mb-4 text-[13px] font-medium text-[#a1a1aa]">Top clients by revenue</p>
           <div className="space-y-px">
             {safeData.topClients.slice(0, 5).map((client, index) => (
-              <div key={client.clientName} className="grid grid-cols-[30px_1fr_120px] items-center rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+              <div key={client.clientName} className="grid grid-cols-[30px_1fr_120px] items-center rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0">
                 <p className="font-['Geist_Mono'] text-[12px] text-[#3f3f46]">{index + 1}</p>
                 <p className="text-[13px] text-[#a1a1aa]">{client.clientName}</p>
                 <p className="text-right font-['Geist_Mono'] text-[12px] text-[#22c55e]">{formatINR(client.totalPaid)}</p>

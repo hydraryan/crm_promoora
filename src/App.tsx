@@ -163,7 +163,33 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
         case 'conversion-report':
           return <ConversionReport />
         default:
-          return <DashboardPage userName={firstName} />
+          return (
+            <DashboardPage
+              userName={firstName}
+              onQuickAction={(actionId) => {
+                if (actionId === 'lead') {
+                  setActiveSection('leads')
+                  setActiveItemId('leads/new')
+                  return
+                }
+
+                if (actionId === 'client') {
+                  setActiveSection('clients')
+                  setActiveItemId('clients/new')
+                  return
+                }
+
+                if (actionId === 'proposal') {
+                  setActiveSection('proposals')
+                  setActiveItemId('proposals/new')
+                  return
+                }
+
+                setActiveSection('followups')
+                setActiveItemId('followups/today')
+              }}
+            />
+          )
       }
     }
 
@@ -263,7 +289,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
 
     if (activeSection === 'proposals') {
       if (activeItemId === 'proposals/new') {
-        return <AllProposals titleOverride="All proposals" />
+        return <AllProposals titleOverride="All proposals" openBuilderOnMount />
       }
 
       const proposalView = proposalsStatusViewMap[activeItemId] ?? proposalsStatusViewMap['proposals/all']
@@ -374,15 +400,41 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
     )
   }
 
+  const handleNotificationNavigate = (actionUrl?: string) => {
+    if (!actionUrl) return
+
+    const normalized = actionUrl.trim().replace(/^https?:\/\/[^/]+/i, '').replace(/^\/+/, '').toLowerCase()
+    if (!normalized) return
+
+    const aliases: Record<string, string> = {
+      dashboard: 'dashboard-overview',
+      'team/list': 'team/all',
+    }
+
+    const targetItemId = aliases[normalized] ?? normalized
+    const targetSection = targetItemId.split('/')[0]
+
+    if (!targetSection) return
+
+    setActiveSection(targetSection)
+    setActiveItemId(targetItemId)
+  }
+
   return (
     <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#0d0d0d]">
       <CRMHeader
         isDetailCollapsed={isDetailCollapsed}
         onToggleCollapse={() => setIsDetailCollapsed((prev) => !prev)}
+        onLogoClick={() => {
+          setActiveSection('dashboard')
+          setActiveItemId('dashboard-overview')
+        }}
         activeSection={activeSection}
         userName={userName}
         userInitials={initials}
         role={role}
+        onSearchNavigate={handleNotificationNavigate}
+        onNotificationNavigate={handleNotificationNavigate}
         onViewProfile={() => {
           const currentUserId = storedUser?._id ?? storedUser?.id
           setActiveSection('team')

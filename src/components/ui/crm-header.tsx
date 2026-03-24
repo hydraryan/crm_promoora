@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell,
   ChevronDown,
@@ -10,19 +10,25 @@ import {
   CloudSun,
   LogOut,
   Menu,
+  Search,
   Sun,
   User,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role } from '@/utils/teamConstants'
+import { apiFetch } from '@/utils/apiFetch'
+import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
 interface CRMHeaderProps {
   isDetailCollapsed: boolean
   onToggleCollapse: () => void
+  onLogoClick: () => void
   activeSection: string
   userName: string
   userInitials: string
   role: Role
+  onSearchNavigate: (actionUrl?: string) => void
+  onNotificationNavigate: (actionUrl?: string) => void
   onViewProfile: () => void
   onSignOut: () => void
 }
@@ -35,6 +41,25 @@ interface WeatherState {
 interface WeatherPresentation {
   label: string
   Icon: LucideIcon
+}
+
+interface HeaderNotification {
+  _id: string
+  category: 'lead' | 'followup' | 'team' | 'system'
+  title: string
+  message: string
+  actionUrl?: string
+  isRead: boolean
+  createdAt: string
+}
+
+type UniversalSearchResult = {
+  id: string
+  type: 'lead' | 'client' | 'project' | 'proposal' | 'followup' | 'invoice' | 'team-member'
+  title: string
+  subtitle: string
+  meta?: string
+  actionUrl: string
 }
 
 function describeWeather(code: number): WeatherPresentation {
@@ -53,15 +78,27 @@ function describeWeather(code: number): WeatherPresentation {
 export function CRMHeader({
   isDetailCollapsed,
   onToggleCollapse,
+  onLogoClick,
   activeSection,
   userName,
   userInitials,
+  onSearchNavigate,
+  onNotificationNavigate,
   onViewProfile,
   onSignOut,
 }: CRMHeaderProps) {
   const [now, setNow] = useState<Date>(new Date())
   const [weather, setWeather] = useState<WeatherState | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<HeaderNotification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [searchResults, setSearchResults] = useState<UniversalSearchResult[]>([])
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
@@ -116,12 +153,137 @@ export function CRMHeader({
   }, [])
 
   useEffect(() => {
+    let mounted = true
+
+    const loadNotifications = async () => {
+      setIsLoadingNotifications(true)
+      try {
+        const data = await apiFetch<{ notifications: HeaderNotification[]; unreadCount: number }>('/notifications?limit=20')
+        if (!mounted) return
+        setNotifications(data.notifications)
+        setUnreadCount(data.unreadCount)
+      } catch {
+        if (!mounted) return
+        setNotifications([])
+        setUnreadCount(0)
+      } finally {
+        if (mounted) {
+          setIsLoadingNotifications(false)
+        }
+      }
+    }
+
+    void loadNotifications()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const token = localStorage.getItem('crm_access_token')
+    if (!token) return
+
+    const apiBase = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '')
+    const streamUrl = `${apiBase}/notifications/stream?token=${encodeURIComponent(token)}`
+    const source = new EventSource(streamUrl)
+
+    source.addEventListener('notification', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as {
+          notification?: HeaderNotification
+          unreadCount?: number
+        }
+        if (!payload.notification) return
+
+        setNotifications((previous) => {
+          const deduped = previous.filter((item) => item._id !== payload.notification?._id)
+          return [payload.notification as HeaderNotification, ...deduped].slice(0, 20)
+        })
+
+        if (typeof payload.unreadCount === 'number') {
+          setUnreadCount(payload.unreadCount)
+        }
+      } catch {
+        // Ignore malformed events.
+      }
+    })
+
+    source.addEventListener('unread-count', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { unreadCount?: number }
+        if (typeof payload.unreadCount === 'number') {
+          setUnreadCount(payload.unreadCount)
+        }
+      } catch {
+        // Ignore malformed events.
+      }
+    })
+
+    return () => source.close()
+  }, [])
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC')
+      const isCmdOrCtrl = isMac ? event.metaKey : event.ctrlKey
+      if (!isCmdOrCtrl || event.key.toLowerCase() !== 'k') return
+      event.preventDefault()
+      setIsSearchOpen(true)
+      setTimeout(() => searchInputRef.current?.focus(), 0)
+    }
+
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
+  }, [searchInputRef])
+
+  useEffect(() => {
+    if (!isSearchOpen) return
+
+    const timer = window.setTimeout(async () => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([])
+        setIsSearchLoading(false)
+        return
+      }
+
+      setIsSearchLoading(true)
+      try {
+        const response = await apiFetch<{ results: UniversalSearchResult[] }>(`/search?q=${encodeURIComponent(searchQuery.trim())}&limit=6`)
+        setSearchResults(response.results ?? [])
+      } catch {
+        setSearchResults([])
+      } finally {
+        setIsSearchLoading(false)
+      }
+    }, 220)
+
+    return () => window.clearTimeout(timer)
+  }, [searchQuery, isSearchOpen])
+
+  useEffect(() => {
     if (!isMenuOpen) return
 
     const onWindowClick = () => setIsMenuOpen(false)
     window.addEventListener('click', onWindowClick)
     return () => window.removeEventListener('click', onWindowClick)
   }, [isMenuOpen])
+
+  useEffect(() => {
+    if (!isNotificationsOpen) return
+
+    const onWindowClick = () => setIsNotificationsOpen(false)
+    window.addEventListener('click', onWindowClick)
+    return () => window.removeEventListener('click', onWindowClick)
+  }, [isNotificationsOpen])
+
+  useEffect(() => {
+    if (!isSearchOpen) return
+
+    const onWindowClick = () => setIsSearchOpen(false)
+    window.addEventListener('click', onWindowClick)
+    return () => window.removeEventListener('click', onWindowClick)
+  }, [isSearchOpen])
 
   const dateLine = useMemo(
     () =>
@@ -137,14 +299,41 @@ export function CRMHeader({
 
   const weatherDisplay = weather ? describeWeather(weather.weatherCode) : null
 
+  const markOneAsRead = async (id: string) => {
+    try {
+      await apiFetch<{ success: boolean }>(`/notifications/${id}/read`, { method: 'PATCH' })
+      setNotifications((previous) => previous.map((item) => (item._id === id ? { ...item, isRead: true } : item)))
+      setUnreadCount((previous) => Math.max(0, previous - 1))
+    } catch {
+      // Ignore one-off failures to keep header interaction responsive.
+    }
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      await apiFetch<{ success: boolean }>('/notifications/mark-all-read', { method: 'POST' })
+      setNotifications((previous) => previous.map((item) => ({ ...item, isRead: true })))
+      setUnreadCount(0)
+    } catch {
+      // Ignore one-off failures to keep header interaction responsive.
+    }
+  }
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center border-b border-neutral-800 bg-black">
       <div className="relative z-10 flex h-full w-86 shrink-0 items-center gap-2 px-3">
-        <img
-          src="/logos/promoora-crm-compact.svg"
-          alt="Promoora"
-          className="h-10 w-auto shrink-0"
-        />
+        <button
+          type="button"
+          onClick={onLogoClick}
+          className="shrink-0 cursor-pointer rounded-md transition-all duration-150 hover:opacity-90 hover:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/70"
+          aria-label="Go to dashboard"
+        >
+          <img
+            src="/logos/promoora-crm-compact.svg"
+            alt="Promoora"
+            className="h-10 w-auto shrink-0"
+          />
+        </button>
         <button
           onClick={onToggleCollapse}
           className="flex size-7 items-center justify-center rounded-md text-neutral-400 transition-colors duration-150 hover:bg-neutral-800 hover:text-neutral-200"
@@ -157,6 +346,72 @@ export function CRMHeader({
 
       <div className="flex flex-1 items-center justify-end px-5">
         <div className="flex items-center gap-2">
+          <div className="relative hidden lg:block">
+            <div
+              className="flex h-8 w-64 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/70 px-2.5 text-xs text-neutral-400 transition-colors hover:border-neutral-700 focus-within:border-neutral-600"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Search size={13} className="shrink-0" />
+              <input
+                ref={(el) => {
+                  searchInputRef.current = el
+                }}
+                type="text"
+                value={searchQuery}
+                onFocus={() => {
+                  setIsSearchOpen(true)
+                  setIsMenuOpen(false)
+                  setIsNotificationsOpen(false)
+                }}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value)
+                  if (!isSearchOpen) {
+                    setIsSearchOpen(true)
+                  }
+                }}
+                placeholder="Search everything..."
+                className="h-full w-full bg-transparent text-xs text-neutral-200 outline-none placeholder:text-neutral-500"
+              />
+              <span className="shrink-0 rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-500">Ctrl/Cmd + K</span>
+            </div>
+
+            {isSearchOpen && (
+              <div
+                className="absolute left-0 top-10 z-50 w-120 overflow-hidden rounded-xl border border-neutral-800 bg-[#0f0f0f] shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="max-h-96 overflow-y-auto">
+                  {searchQuery.trim().length < 2 ? (
+                    <p className="px-3 py-5 text-center text-sm text-neutral-400">Type at least 2 characters</p>
+                  ) : isSearchLoading ? (
+                    <p className="px-3 py-5 text-center text-sm text-neutral-400">Searching...</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="px-3 py-5 text-center text-sm text-neutral-400">No matches found</p>
+                  ) : (
+                    searchResults.map((result) => (
+                      <button
+                        type="button"
+                        key={`${result.type}-${result.id}`}
+                        onClick={() => {
+                          setIsSearchOpen(false)
+                          onSearchNavigate(result.actionUrl)
+                        }}
+                        className="block w-full border-b border-neutral-900 px-3 py-2 text-left transition-colors hover:bg-neutral-900/70"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-medium text-neutral-100">{result.title}</p>
+                          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-neutral-400">{result.type}</span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{result.subtitle}</p>
+                        {result.meta && <p className="mt-1 text-[11px] text-neutral-500">{result.meta}</p>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="hidden md:flex items-center rounded-xl border border-neutral-500/80 px-3 py-1.5 text-xs text-neutral-100">
             <div className="pr-3 leading-tight">
               <p className="font-medium tracking-[0.06em]">{dateLine}</p>
@@ -184,10 +439,70 @@ export function CRMHeader({
             type="button"
             className="relative flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800"
             aria-label="Notifications"
+            aria-expanded={isNotificationsOpen}
+            onClick={(event) => {
+              event.stopPropagation()
+              setIsNotificationsOpen((previous) => !previous)
+              setIsMenuOpen(false)
+            }}
           >
             <Bell size={15} />
-            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
           </button>
+
+          {isNotificationsOpen && (
+            <div
+              className="absolute right-20 top-11 z-50 w-80 overflow-hidden rounded-xl border border-neutral-800 bg-[#0f0f0f] shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-neutral-200">Notifications</p>
+                  <p className="text-[11px] text-neutral-500">{unreadCount} unread</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void markAllAsRead()
+                  }}
+                  className="text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-400 transition-colors hover:text-neutral-200"
+                >
+                  Mark all read
+                </button>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto">
+                {isLoadingNotifications ? (
+                  <p className="px-3 py-6 text-center text-sm text-neutral-400">Loading notifications...</p>
+                ) : notifications.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-sm text-neutral-400">No notifications yet</p>
+                ) : (
+                  notifications.map((item) => (
+                    <button
+                      type="button"
+                      key={item._id}
+                      onClick={() => {
+                        if (!item.isRead) {
+                          void markOneAsRead(item._id)
+                        }
+                        setIsNotificationsOpen(false)
+                        onNotificationNavigate(item.actionUrl)
+                      }}
+                      className="block w-full border-b border-neutral-900 px-3 py-2 text-left transition-colors hover:bg-neutral-900/60"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className={`text-sm ${item.isRead ? 'text-neutral-300' : 'text-neutral-100 font-medium'}`}>{item.title}</p>
+                        {!item.isRead && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />}
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{item.message}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">{formatRelativeTime(item.createdAt)}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="relative">
             <button
               type="button"
@@ -197,6 +512,7 @@ export function CRMHeader({
               onClick={(event) => {
                 event.stopPropagation()
                 setIsMenuOpen((prev) => !prev)
+                setIsNotificationsOpen(false)
               }}
             >
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600">

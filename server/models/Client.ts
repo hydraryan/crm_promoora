@@ -1,4 +1,5 @@
 import { Schema, model, type Document, Types } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 export const CLIENT_STATUSES = ['Active', 'Onboarding', 'Inactive'] as const
 export type ClientStatus = (typeof CLIENT_STATUSES)[number]
@@ -22,6 +23,8 @@ export interface IClient extends Document {
   activeFrom?: Date
   contractValue?: number
   notes?: string
+  searchText: string
+  searchPrefixes: string[]
   createdBy: Types.ObjectId
   convertedFromLead?: string
   createdAt: Date
@@ -95,6 +98,16 @@ const clientSchema = new Schema<IClient>(
       type: String,
       trim: true,
     },
+    searchText: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    searchPrefixes: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -113,5 +126,22 @@ const clientSchema = new Schema<IClient>(
 
 clientSchema.index({ status: 1, assignedTo: 1 })
 clientSchema.index({ createdAt: -1 })
+clientSchema.index({ searchPrefixes: 1, assignedTo: 1 })
+clientSchema.index({ searchPrefixes: 1, createdBy: 1 })
+
+clientSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([
+    this.businessName,
+    this.ownerName,
+    this.phone,
+    this.email,
+    this.website,
+    this.address,
+    this.notes,
+    this.services?.join(' '),
+  ])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 export const Client = model<IClient>('Client', clientSchema)

@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType } from 'mongoose'
+import { buildSearchArtifacts } from './search-utils.js'
 
 const invoiceLineItemSchema = new Schema(
   {
@@ -25,6 +26,8 @@ const invoiceSchema = new Schema(
     totalAmount: { type: Number, required: true, min: 0 },
     status: { type: String, enum: ['Unpaid', 'Paid', 'Overdue'], default: 'Unpaid', index: true },
     notes: { type: String, default: '', trim: true },
+    searchText: { type: String, default: '', index: true },
+    searchPrefixes: { type: [String], default: [], index: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   {
@@ -33,6 +36,18 @@ const invoiceSchema = new Schema(
 )
 
 invoiceSchema.index({ createdAt: -1 })
+invoiceSchema.index({ searchPrefixes: 1, createdBy: 1 })
+
+invoiceSchema.pre('save', function () {
+  const artifacts = buildSearchArtifacts([
+    this.invoiceNumber,
+    this.status,
+    this.notes,
+    this.lineItems?.map((item: { description: string; subDescription?: string }) => `${item.description} ${item.subDescription ?? ''}`).join(' '),
+  ])
+  this.searchText = artifacts.searchText
+  this.searchPrefixes = artifacts.searchPrefixes
+})
 
 export type InvoiceDoc = InferSchemaType<typeof invoiceSchema>
 

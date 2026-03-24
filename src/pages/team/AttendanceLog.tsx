@@ -126,7 +126,7 @@ export default function AttendanceLog({ role, currentUserId, onOpenMember }: Att
           <div
             key={member._id}
             onClick={() => onOpenMember(member._id)}
-            className="group grid cursor-pointer grid-cols-[1fr_80px_90px_90px_120px_130px] gap-4 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]"
+            className="group grid cursor-pointer grid-cols-[1fr_80px_90px_90px_120px_130px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
           >
             <div className="flex items-center gap-3 self-center">
               <div className="flex size-6 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${roleColors[member.role]}20` }}>
