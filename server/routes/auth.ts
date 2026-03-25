@@ -69,6 +69,21 @@ router.post('/login', async (req: Request, res: Response) => {
     // Hash refresh token before storing
     const refreshTokenHash = await hashPassword(refreshToken)
 
+    // Prevent multiple open sessions from inflating attendance/activity metrics.
+    await UserSession.updateMany(
+      {
+        userId: user._id,
+        $or: [{ logoutAt: { $exists: false } }, { logoutAt: null }],
+      },
+      {
+        $set: {
+          logoutAt: new Date(),
+          lastActiveAt: new Date(),
+          expiresAt: new Date(),
+        },
+      },
+    )
+
     // Create session
     const session = await UserSession.create({
       userId: user._id,

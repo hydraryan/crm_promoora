@@ -24,6 +24,7 @@ type SessionLite = {
   userId: string
   loginAt: string
   logoutAt?: string
+  activeMs?: number
   ipAddress?: string
   userAgent?: string
 }
@@ -75,9 +76,15 @@ function getRouteId(paramValue: string | string[] | undefined): string {
 
 function monthBounds(month: string) {
   const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7)
-  const start = new Date(`${safeMonth}-01T00:00:00.000Z`)
-  const end = new Date(start)
-  end.setUTCMonth(end.getUTCMonth() + 1)
+  const [yearText, monthText] = safeMonth.split('-')
+  const year = Number(yearText)
+  const monthIndex = Number(monthText)
+  const nextMonthIndex = monthIndex === 12 ? 1 : monthIndex + 1
+  const nextMonthYear = monthIndex === 12 ? year + 1 : year
+
+  const start = new Date(`${safeMonth}-01T00:00:00+05:30`)
+  const end = new Date(`${String(nextMonthYear).padStart(4, '0')}-${String(nextMonthIndex).padStart(2, '0')}-01T00:00:00+05:30`)
+
   return { month: safeMonth, start, end }
 }
 
@@ -85,17 +92,46 @@ function formatDayKeyIST(value: Date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(value)
 }
 
-function buildMonthlyAttendance(month: string, sessions: SessionLite[]) {
-  const { month: safeMonth, start, end } = monthBounds(month)
-  const today = new Date()
+function dayStartISTUtc(dateKey: string): Date {
+  return new Date(`${dateKey}T00:00:00+05:30`)
+}
 
-  const byDay = new Map<string, SessionLite[]>()
-  sessions.forEach((session) => {
-    const login = new Date(session.loginAt)
-    const key = formatDayKeyIST(login)
-    if (!byDay.has(key)) byDay.set(key, [])
-    byDay.get(key)?.push(session)
-  })
+function dayEndISTUtcExclusive(dateKey: string): Date {
+  return new Date(dayStartISTUtc(dateKey).getTime() + 24 * 60 * 60 * 1000)
+}
+
+function listMonthDateKeys(month: string): string[] {
+  const [yearText, monthText] = month.split('-')
+  const year = Number(yearText)
+  const monthIndex = Number(monthText)
+
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 1 || monthIndex > 12) {
+    return []
+  }
+
+  const totalDays = new Date(year, monthIndex, 0).getDate()
+  const keys: string[] = []
+
+  for (let day = 1; day <= totalDays; day += 1) {
+    keys.push(`${yearText}-${monthText}-${String(day).padStart(2, '0')}`)
+  }
+
+  return keys
+}
+
+function buildMonthlyAttendance(month: string, sessions: SessionLite[]) {
+  const { month: safeMonth } = monthBounds(month)
+  const today = new Date()
+  const todayKey = formatDayKeyIST(today)
+  const monthKeys = listMonthDateKeys(safeMonth)
+
+  const openSessions = sessions.filter((session) => !session.logoutAt)
+  const latestOpenSessionId =
+    openSessions.length > 0
+      ? [...openSessions].sort((a, b) => new Date(b.loginAt).getTime() - new Date(a.loginAt).getTime())[0]?._id
+      : undefined
+
+  const normalizedSessions = sessions.filter((session) => session.logoutAt || session._id === latestOpenSessionId)
 
   const days: Array<{
     date: string
@@ -105,62 +141,96 @@ function buildMonthlyAttendance(month: string, sessions: SessionLite[]) {
     firstLogin?: string
     lastLogout?: string
     totalMinutes: number
+    loginMinutes: number
+    activeMinutes: number
+    productivityRatio: number
     status: 'present' | 'absent' | 'optional' | 'active'
   }> = []
 
-  let cursor = new Date(start)
   let presentDays = 0
   let absentDays = 0
   let optionalDays = 0
   let totalWorkingDays = 0
-  let totalMinutesInPresentDays = 0
+  let totalLoginMinutesInPresentDays = 0
+  let totalActiveMinutesInPresentDays = 0
 
-  while (cursor < end) {
-    const dateKey = cursor.toISOString().slice(0, 10)
-    const dayOfWeek = cursor.getUTCDay()
+  for (const dateKey of monthKeys) {
+    const dayOfWeek = new Date(`${dateKey}T00:00:00Z`).getUTCDay()
     const isWorkingDay = dayOfWeek !== 0
-    const daySessions = byDay.get(dateKey) ?? []
+    const dayStart = dayStartISTUtc(dateKey)
+    const dayEndExclusive = dayEndISTUtcExclusive(dateKey)
 
     if (isWorkingDay) totalWorkingDays += 1
 
     let firstLogin: string | undefined
     let lastLogout: string | undefined
-    let totalMinutes = 0
+    let totalLoginMs = 0
+    let totalActiveMs = 0
     let hasOpenSession = false
 
-    if (daySessions.length > 0) {
-      const sortedByLogin = [...daySessions].sort((a, b) => new Date(a.loginAt).getTime() - new Date(b.loginAt).getTime())
-      firstLogin = sortedByLogin[0]?.loginAt
+    const daySessions = normalizedSessions.filter((session) => {
+      const startAt = new Date(session.loginAt)
+      const endAt = session.logoutAt ? new Date(session.logoutAt) : today
 
-      daySessions.forEach((session) => {
-        const startAt = new Date(session.loginAt)
-        const endAt = session.logoutAt ? new Date(session.logoutAt) : today
+      if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) return false
+      return startAt < dayEndExclusive && endAt > dayStart
+    })
 
-        if (!session.logoutAt) {
-          hasOpenSession = true
-        }
+    for (const session of daySessions) {
+      const startAt = new Date(session.loginAt)
+      const rawEndAt = session.logoutAt ? new Date(session.logoutAt) : today
 
-        if (!Number.isNaN(startAt.getTime()) && !Number.isNaN(endAt.getTime()) && endAt > startAt) {
-          totalMinutes += Math.floor((endAt.getTime() - startAt.getTime()) / 60000)
-        }
+      const overlapStart = new Date(Math.max(startAt.getTime(), dayStart.getTime()))
+      const overlapEnd = new Date(Math.min(rawEndAt.getTime(), dayEndExclusive.getTime()))
 
-        if (session.logoutAt) {
-          if (!lastLogout || new Date(session.logoutAt) > new Date(lastLogout)) {
-            lastLogout = session.logoutAt
+      if (overlapEnd <= overlapStart) continue
+
+      const overlapMs = overlapEnd.getTime() - overlapStart.getTime()
+      totalLoginMs += overlapMs
+
+      if (!firstLogin || startAt < new Date(firstLogin)) {
+        firstLogin = startAt.toISOString()
+      }
+
+      if (session.logoutAt) {
+        const logout = new Date(session.logoutAt)
+        if (logout >= dayStart && logout <= dayEndExclusive) {
+          if (!lastLogout || logout > new Date(lastLogout)) {
+            lastLogout = logout.toISOString()
           }
         }
-      })
+      }
+
+      if (!session.logoutAt && dateKey === todayKey) {
+        hasOpenSession = true
+      }
+
+      const sessionDurationMs = Math.max(0, rawEndAt.getTime() - startAt.getTime())
+      const sessionActiveMs = Math.max(0, session.activeMs ?? 0)
+
+      if (sessionDurationMs > 0 && sessionActiveMs > 0) {
+        const proportionalActive = (sessionActiveMs * overlapMs) / sessionDurationMs
+        totalActiveMs += proportionalActive
+      }
     }
+
+    // Defensive cap: one calendar day cannot exceed 24 hours of tracked duration.
+    totalLoginMs = Math.min(totalLoginMs, 24 * 60 * 60 * 1000)
+    totalActiveMs = Math.min(totalActiveMs, totalLoginMs)
+
+    const totalMinutes = Math.round(totalLoginMs / 60000)
+    const activeMinutes = Math.round(totalActiveMs / 60000)
+    const productivityRatio = totalMinutes > 0 ? Number((activeMinutes / totalMinutes).toFixed(2)) : 0
 
     let status: 'present' | 'absent' | 'optional' | 'active'
 
     if (hasOpenSession) {
       status = 'active'
-    } else if (isWorkingDay && daySessions.length > 0) {
+    } else if (isWorkingDay && totalMinutes > 0) {
       status = 'present'
-    } else if (isWorkingDay && daySessions.length === 0) {
+    } else if (isWorkingDay && totalMinutes === 0) {
       status = 'absent'
-    } else if (!isWorkingDay && daySessions.length > 0) {
+    } else if (!isWorkingDay && totalMinutes > 0) {
       status = 'optional'
     } else {
       status = 'optional'
@@ -168,12 +238,13 @@ function buildMonthlyAttendance(month: string, sessions: SessionLite[]) {
 
     if (isWorkingDay && (status === 'present' || status === 'active')) {
       presentDays += 1
-      totalMinutesInPresentDays += totalMinutes
+      totalLoginMinutesInPresentDays += totalMinutes
+      totalActiveMinutesInPresentDays += activeMinutes
     } else if (isWorkingDay && status === 'absent') {
       absentDays += 1
     }
 
-    if (!isWorkingDay && daySessions.length > 0) {
+    if (!isWorkingDay && totalMinutes > 0) {
       optionalDays += 1
     }
 
@@ -185,14 +256,17 @@ function buildMonthlyAttendance(month: string, sessions: SessionLite[]) {
       firstLogin,
       lastLogout,
       totalMinutes,
+      loginMinutes: totalMinutes,
+      activeMinutes,
+      productivityRatio,
       status,
     })
-
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
   const attendancePercent = totalWorkingDays > 0 ? (presentDays / totalWorkingDays) * 100 : 0
-  const avgHoursPerDay = presentDays > 0 ? totalMinutesInPresentDays / presentDays / 60 : 0
+  const avgHoursPerDay = presentDays > 0 ? totalLoginMinutesInPresentDays / presentDays / 60 : 0
+  const avgActiveHoursPerDay = presentDays > 0 ? totalActiveMinutesInPresentDays / presentDays / 60 : 0
+  const productivityRatio = totalLoginMinutesInPresentDays > 0 ? totalActiveMinutesInPresentDays / totalLoginMinutesInPresentDays : 0
 
   return {
     month: safeMonth,
@@ -202,6 +276,10 @@ function buildMonthlyAttendance(month: string, sessions: SessionLite[]) {
     totalWorkingDays,
     attendancePercent: Number(attendancePercent.toFixed(2)),
     avgHoursPerDay: Number(avgHoursPerDay.toFixed(2)),
+    avgActiveHoursPerDay: Number(avgActiveHoursPerDay.toFixed(2)),
+    loginMinutes: totalLoginMinutesInPresentDays,
+    activeMinutes: totalActiveMinutesInPresentDays,
+    productivityRatio: Number(productivityRatio.toFixed(2)),
     days,
   }
 }
@@ -569,6 +647,46 @@ router.get('/members/:id/activity', async (req: AuthRequest, res: Response) => {
   }
 })
 
+router.post('/attendance/engagement', async (req: AuthRequest, res: Response) => {
+  try {
+    const auth = await getAuthContext(req)
+    if (!auth) return res.status(401).json({ error: 'Not authenticated' })
+
+    const { activeMs } = req.body as { activeMs?: number }
+    if (typeof activeMs !== 'number' || !Number.isFinite(activeMs)) {
+      return res.status(400).json({ error: 'activeMs must be a number' })
+    }
+
+    const clampedActiveMs = Math.max(0, Math.min(Math.floor(activeMs), 5 * 60 * 1000))
+    if (clampedActiveMs === 0) {
+      return res.json({ success: true })
+    }
+
+    const currentSession = await UserSession.findOne(
+      {
+        userId: auth.userId,
+        $or: [{ logoutAt: { $exists: false } }, { logoutAt: null }],
+      },
+      {},
+      { sort: { loginAt: -1 } },
+    )
+
+    if (!currentSession) {
+      return res.json({ success: true })
+    }
+
+    currentSession.activeMs = Math.max(0, (currentSession.activeMs ?? 0) + clampedActiveMs)
+    currentSession.lastActiveAt = new Date()
+    currentSession.lastEngagementAt = new Date()
+    await currentSession.save()
+
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Attendance engagement update error:', error)
+    return res.status(500).json({ error: 'Failed to update engagement metrics' })
+  }
+})
+
 router.get('/members/:id/attendance', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
@@ -583,14 +701,16 @@ router.get('/members/:id/attendance', async (req: AuthRequest, res: Response) =>
 
     const sessions = await UserSession.find({
       userId: memberId,
-      loginAt: { $gte: bounds.start, $lt: bounds.end },
-    }).select('_id userId loginAt logoutAt ipAddress userAgent createdAt').sort({ loginAt: 1 })
+      loginAt: { $lt: bounds.end },
+      $or: [{ logoutAt: { $gte: bounds.start } }, { logoutAt: { $exists: false } }, { logoutAt: null }],
+    }).select('_id userId loginAt logoutAt activeMs ipAddress userAgent createdAt').sort({ loginAt: 1 })
 
     const mapped: SessionLite[] = sessions.map((session) => ({
       _id: String(session._id),
       userId: String(session.userId),
       loginAt: (session.loginAt ?? session.createdAt).toISOString(),
       logoutAt: session.logoutAt ? session.logoutAt.toISOString() : undefined,
+      activeMs: session.activeMs ?? 0,
       ipAddress: session.ipAddress ?? undefined,
       userAgent: session.userAgent ?? undefined,
     }))
@@ -617,8 +737,9 @@ router.get('/attendance', async (req: AuthRequest, res: Response) => {
 
     const sessions = await UserSession.find({
       userId: { $in: users.map((user) => user._id) },
-      loginAt: { $gte: bounds.start, $lt: bounds.end },
-    }).select('_id userId loginAt logoutAt ipAddress userAgent createdAt')
+      loginAt: { $lt: bounds.end },
+      $or: [{ logoutAt: { $gte: bounds.start } }, { logoutAt: { $exists: false } }, { logoutAt: null }],
+    }).select('_id userId loginAt logoutAt activeMs ipAddress userAgent createdAt')
 
     const sessionsByUser = new Map<string, SessionLite[]>()
     sessions.forEach((session) => {
@@ -629,6 +750,7 @@ router.get('/attendance', async (req: AuthRequest, res: Response) => {
         userId: key,
         loginAt: (session.loginAt ?? session.createdAt).toISOString(),
         logoutAt: session.logoutAt ? session.logoutAt.toISOString() : undefined,
+        activeMs: session.activeMs ?? 0,
         ipAddress: session.ipAddress ?? undefined,
         userAgent: session.userAgent ?? undefined,
       })
@@ -650,6 +772,10 @@ router.get('/attendance', async (req: AuthRequest, res: Response) => {
           totalWorkingDays: attendance.totalWorkingDays,
           attendancePercent: attendance.attendancePercent,
           avgHoursPerDay: attendance.avgHoursPerDay,
+          avgActiveHoursPerDay: attendance.avgActiveHoursPerDay,
+          loginMinutes: attendance.loginMinutes,
+          activeMinutes: attendance.activeMinutes,
+          productivityRatio: attendance.productivityRatio,
         },
       }
     })

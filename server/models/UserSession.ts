@@ -10,6 +10,8 @@ export interface IUserSession extends Document {
   logoutAt?: Date
   ipAddress?: string
   lastActiveAt?: Date
+  activeMs: number
+  lastEngagementAt?: Date
   expiresAt: Date
   createdAt: Date
 }
@@ -49,6 +51,14 @@ const userSessionSchema = new Schema<IUserSession>(
     lastActiveAt: {
       type: Date,
       default: () => new Date(),
+    },
+    activeMs: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lastEngagementAt: {
+      type: Date,
     },
     expiresAt: {
       type: Date,

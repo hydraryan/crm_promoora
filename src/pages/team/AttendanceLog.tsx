@@ -17,6 +17,10 @@ type AttendanceMemberSummary = {
     totalWorkingDays: number
     attendancePercent: number
     avgHoursPerDay: number
+    avgActiveHoursPerDay: number
+    loginMinutes: number
+    activeMinutes: number
+    productivityRatio: number
   }
 }
 
@@ -100,6 +104,7 @@ export default function AttendanceLog({ role, currentUserId, onOpenMember }: Att
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#404040]">Team</p>
           <h1 className="text-[22px] font-semibold text-[#fafafa]">Attendance log</h1>
+          <p className="mt-1 text-[11px] text-[#52525b]">Productivity = active website time / login time</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -113,8 +118,8 @@ export default function AttendanceLog({ role, currentUserId, onOpenMember }: Att
         </div>
       </div>
 
-      <div className="mb-1 grid grid-cols-[1fr_80px_90px_90px_120px_130px] gap-4 px-3 py-2">
-        {['Member', 'Present', 'Absent', 'Sundays', 'Avg hrs/day', 'Attendance'].map((col) => (
+      <div className="mb-1 grid grid-cols-[1fr_80px_90px_90px_130px_130px_120px_130px] gap-4 px-3 py-2">
+        {['Member', 'Present', 'Absent', 'Sundays', 'Avg login/day', 'Avg active/day', 'Productivity', 'Attendance'].map((col) => (
           <p key={col} className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">
             {col}
           </p>
@@ -126,7 +131,7 @@ export default function AttendanceLog({ role, currentUserId, onOpenMember }: Att
           <div
             key={member._id}
             onClick={() => onOpenMember(member._id)}
-            className="group grid cursor-pointer grid-cols-[1fr_80px_90px_90px_120px_130px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
+            className="group grid cursor-pointer grid-cols-[1fr_80px_90px_90px_130px_130px_120px_130px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
           >
             <div className="flex items-center gap-3 self-center">
               <div className="flex size-6 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${roleColors[member.role]}20` }}>
@@ -141,6 +146,8 @@ export default function AttendanceLog({ role, currentUserId, onOpenMember }: Att
             <p className={`self-center font-['Geist_Mono'] text-[13px] ${summary.absentDays > 3 ? 'text-[#ef4444]' : 'text-[#52525b]'}`}>{summary.absentDays}</p>
             <p className="self-center font-['Geist_Mono'] text-[13px] text-[#6366f1]">{summary.optionalDays > 0 ? summary.optionalDays : '—'}</p>
             <p className="self-center font-['Geist_Mono'] text-[13px] text-[#71717a]">{summary.avgHoursPerDay > 0 ? `${summary.avgHoursPerDay.toFixed(1)}h` : '—'}</p>
+            <p className="self-center font-['Geist_Mono'] text-[13px] text-[#71717a]">{summary.avgActiveHoursPerDay > 0 ? `${summary.avgActiveHoursPerDay.toFixed(1)}h` : '—'}</p>
+            <p className="self-center font-['Geist_Mono'] text-[13px] text-[#a1a1aa]">{Math.round(summary.productivityRatio * 100)}%</p>
 
             <div className="flex items-center gap-2 self-center">
               <div className="flex-1 overflow-hidden rounded-full bg-[#1a1a1a]" style={{ height: 3 }}>

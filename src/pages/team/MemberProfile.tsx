@@ -223,7 +223,10 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
       <div className="grid grid-cols-1 gap-8 px-8 py-6 xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Attendance</p>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Attendance</p>
+              <p className="mt-1 text-[11px] text-[#52525b]">Productivity = active website time / login time</p>
+            </div>
             <div className="flex items-center gap-2">
               <button onClick={prevMonth} className="flex size-6 items-center justify-center rounded-md text-[#52525b] transition-colors hover:bg-[#1a1a1a]">
                 <ChevronLeft size={13} />
@@ -245,6 +248,8 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
                   { label: 'Absent', value: attendance.absentDays, color: '#ef4444' },
                   { label: 'Sundays', value: attendance.optionalDays, color: '#6366f1' },
                   { label: 'Avg hrs', value: `${attendance.avgHoursPerDay.toFixed(1)}h`, color: '#a1a1aa' },
+                  { label: 'Avg active', value: `${attendance.avgActiveHoursPerDay.toFixed(1)}h`, color: '#22c55e' },
+                  { label: 'Productivity', value: `${Math.round(attendance.productivityRatio * 100)}%`, color: '#f59e0b' },
                 ].map((summary) => (
                   <div key={summary.label} className="text-center">
                     <p className="font-['Geist_Mono'] text-[20px] font-medium" style={{ color: summary.color }}>
@@ -269,8 +274,8 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
               </div>
 
               <div className="overflow-hidden rounded-2xl bg-[#111111]">
-                <div className="grid grid-cols-[80px_1fr_90px_90px_70px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5">
-                  {['Date', 'Day', 'First login', 'Last logout', 'Hours'].map((header) => (
+                <div className="grid grid-cols-[80px_1fr_90px_90px_110px_110px_90px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5">
+                  {['Date', 'Day', 'First login', 'Last logout', 'Login hrs', 'Active hrs', 'Prod'].map((header) => (
                     <p key={header} className="text-[10px] font-medium uppercase tracking-widest text-[#3f3f46]">
                       {header}
                     </p>
@@ -282,7 +287,7 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
                   .map((day) => (
                     <div
                       key={day.date}
-                      className={`grid grid-cols-[80px_1fr_90px_90px_70px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5 last:border-b-0 ${day.status === 'absent' ? 'opacity-40' : ''}`}
+                      className={`grid grid-cols-[80px_1fr_90px_90px_110px_110px_90px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5 last:border-b-0 ${day.status === 'absent' ? 'opacity-40' : ''}`}
                     >
                       <p className="font-['Geist_Mono'] text-[12px] text-[#52525b]">{new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                       <p className="text-[12px] text-[#52525b]">
@@ -301,9 +306,13 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
                           '—'
                         )}
                       </p>
-                      <p className={`font-['Geist_Mono'] text-[12px] ${day.totalMinutes > 0 ? 'text-[#a1a1aa]' : 'text-[#3f3f46]'}`}>
-                        {day.totalMinutes > 0 ? `${Math.floor(day.totalMinutes / 60)}h ${day.totalMinutes % 60}m` : '—'}
+                      <p className={`font-['Geist_Mono'] text-[12px] ${day.loginMinutes > 0 ? 'text-[#a1a1aa]' : 'text-[#3f3f46]'}`}>
+                        {day.loginMinutes > 0 ? `${Math.floor(day.loginMinutes / 60)}h ${day.loginMinutes % 60}m` : '—'}
                       </p>
+                      <p className={`font-['Geist_Mono'] text-[12px] ${day.activeMinutes > 0 ? 'text-[#22c55e]' : 'text-[#3f3f46]'}`}>
+                        {day.activeMinutes > 0 ? `${Math.floor(day.activeMinutes / 60)}h ${day.activeMinutes % 60}m` : '—'}
+                      </p>
+                      <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">{day.loginMinutes > 0 ? `${Math.round(day.productivityRatio * 100)}%` : '—'}</p>
                     </div>
                   ))}
               </div>

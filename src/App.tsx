@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CRMHeader } from '@/components/ui/crm-header'
 import { PromoosaSidebar } from '@/components/ui/promoora-sidebar'
 import { PermissionProvider } from '@/context/PermissionContext'
 import { usePermissions } from '@/context/PermissionContext'
+import { apiFetch } from '@/utils/apiFetch'
 import DemoOne from './demo'
 import DashboardPage from './pages/dashboard.tsx'
 import PipelineSummary from './pages/dashboard/PipelineSummary'
@@ -148,6 +149,74 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
 
   const isInvoicingView = (itemId: string) => itemId.startsWith('invoicing/')
   const isTeamMemberView = (itemId: string) => itemId.startsWith('team/member/')
+
+  useEffect(() => {
+    const idleThresholdMs = 60_000
+    const engagementFlushThresholdMs = 10_000
+    let lastInteractionAt = Date.now()
+    let lastTickAt = Date.now()
+    let pendingActiveMs = 0
+    let isWindowFocused = document.hasFocus()
+
+    const markInteraction = () => {
+      lastInteractionAt = Date.now()
+    }
+
+    const onFocus = () => {
+      isWindowFocused = true
+      markInteraction()
+    }
+
+    const onBlur = () => {
+      isWindowFocused = false
+    }
+
+    const tick = () => {
+      const now = Date.now()
+      const elapsedMs = now - lastTickAt
+      lastTickAt = now
+
+      const isVisible = !document.hidden
+      const isActive = isVisible && isWindowFocused && now - lastInteractionAt <= idleThresholdMs
+
+      if (isActive && elapsedMs > 0) {
+        pendingActiveMs += elapsedMs
+      }
+
+      if (pendingActiveMs >= engagementFlushThresholdMs) {
+        const payloadMs = Math.floor(pendingActiveMs)
+        pendingActiveMs = 0
+
+        void apiFetch('/team/attendance/engagement', {
+          method: 'POST',
+          body: JSON.stringify({ activeMs: payloadMs }),
+        }).catch(() => {
+          // Keep UX non-blocking if engagement heartbeat fails.
+        })
+      }
+    }
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart']
+    for (const eventName of events) {
+      window.addEventListener(eventName, markInteraction, { passive: true })
+    }
+
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('blur', onBlur)
+    document.addEventListener('visibilitychange', markInteraction)
+
+    const interval = window.setInterval(tick, 5_000)
+
+    return () => {
+      window.clearInterval(interval)
+      for (const eventName of events) {
+        window.removeEventListener(eventName, markInteraction)
+      }
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('blur', onBlur)
+      document.removeEventListener('visibilitychange', markInteraction)
+    }
+  }, [])
 
   const renderMainContent = () => {
     if (activeSection === 'dashboard') {

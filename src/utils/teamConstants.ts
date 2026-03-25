@@ -46,6 +46,9 @@ export interface DailyAttendance {
   firstLogin?: string
   lastLogout?: string
   totalMinutes: number
+  loginMinutes: number
+  activeMinutes: number
+  productivityRatio: number
   status: 'present' | 'absent' | 'optional' | 'active'
 }
 
@@ -57,6 +60,10 @@ export interface MonthlyAttendanceSummary {
   totalWorkingDays: number
   attendancePercent: number
   avgHoursPerDay: number
+  avgActiveHoursPerDay: number
+  loginMinutes: number
+  activeMinutes: number
+  productivityRatio: number
   days: DailyAttendance[]
 }
 
