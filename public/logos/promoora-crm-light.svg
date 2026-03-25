@@ -1,0 +1,11 @@
+<svg viewBox="0 0 760 170" xmlns="http://www.w3.org/2000/svg" width="760" height="170">
+  <rect width="760" height="170" rx="14" fill="#EFF6FF"/>
+  <text x="40" y="114" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="88" font-weight="300" fill="#0A1628">Promo</text>
+  <circle cx="305" cy="82" r="5" fill="#0077FF"/>
+  <text x="313" y="114" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="88" font-weight="300" fill="#0055CC" opacity="0.38">[</text>
+  <text x="339" y="114" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="88" font-weight="700" fill="#0055CC">ora</text>
+  <text x="479" y="114" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="88" font-weight="300" fill="#0055CC" opacity="0.38">]</text>
+  <rect x="517" y="78" width="65" height="28" rx="5" fill="#0055CC"/>
+  <text x="549" y="93" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="central" letter-spacing="2">CRM</text>
+  <text x="42" y="140" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="10" font-weight="400" fill="#0055CC" opacity="0.36" letter-spacing="5">CRM · CUSTOMER RELATIONSHIP MANAGEMENT</text>
+</svg>

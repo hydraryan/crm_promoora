@@ -430,7 +430,7 @@ function LoginPage({ onAuthenticated }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="login-theme min-h-screen grid text-foreground lg:grid-cols-2">
       <div className="relative hidden lg:flex flex-col justify-between bg-linear-to-br from-primary/90 via-primary to-primary/80 p-12 text-primary-foreground">
         <img
           src="https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1600&q=80"

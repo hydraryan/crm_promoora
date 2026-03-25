@@ -18,6 +18,8 @@ import {
 import type { Role } from '@/utils/teamConstants'
 import { apiFetch } from '@/utils/apiFetch'
 import { formatRelativeTime } from '@/utils/formatRelativeTime'
+import { useTheme } from '@/context/ThemeContext'
+import { ThemeSwitch } from '@/components/ui/theme-switch-button'
 
 interface CRMHeaderProps {
   isDetailCollapsed: boolean
@@ -87,6 +89,7 @@ export function CRMHeader({
   onViewProfile,
   onSignOut,
 }: CRMHeaderProps) {
+  const { theme, toggleTheme } = useTheme()
   const [now, setNow] = useState<Date>(new Date())
   const [weather, setWeather] = useState<WeatherState | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -320,23 +323,23 @@ export function CRMHeader({
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center border-b border-neutral-800 bg-black">
+    <header className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center border-b border-border bg-card text-card-foreground transition-colors duration-300">
       <div className="relative z-10 flex h-full w-86 shrink-0 items-center gap-2 px-3">
         <button
           type="button"
           onClick={onLogoClick}
-          className="shrink-0 cursor-pointer rounded-md transition-all duration-150 hover:opacity-90 hover:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/70"
+          className="shrink-0 cursor-pointer rounded-md transition-all duration-150 hover:opacity-90 hover:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           aria-label="Go to dashboard"
         >
           <img
-            src="/logos/promoora-crm-compact.svg"
+            src={theme === 'light' ? '/logos/promoora-crm-light.svg' : '/logos/promoora-crm-compact.svg'}
             alt="Promoora"
             className="h-10 w-auto shrink-0"
           />
         </button>
         <button
           onClick={onToggleCollapse}
-          className="flex size-7 items-center justify-center rounded-md text-neutral-400 transition-colors duration-150 hover:bg-neutral-800 hover:text-neutral-200"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
           type="button"
           aria-label={isDetailCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -344,11 +347,34 @@ export function CRMHeader({
         </button>
       </div>
 
+      <div className="hidden md:flex shrink-0 items-center rounded-xl border border-border px-3 py-1.5 text-xs text-foreground">
+        <div className="pr-3 leading-tight">
+          <p className="font-medium tracking-[0.06em]">{dateLine}</p>
+        </div>
+        <div className="h-8 w-px bg-border" />
+        <div className="pl-3 leading-tight">
+          {weatherDisplay && weather ? (
+            <>
+              <p className="font-medium">{Math.round(weather.temperatureC)}°C</p>
+              <p className="flex items-center gap-1 text-muted-foreground">
+                <weatherDisplay.Icon size={12} />
+                <span>{weatherDisplay.label}</span>
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium">--°C</p>
+              <p className="text-muted-foreground">waiting location...</p>
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-1 items-center justify-end px-5">
         <div className="flex items-center gap-2">
           <div className="relative hidden lg:block">
             <div
-              className="flex h-8 w-64 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/70 px-2.5 text-xs text-neutral-400 transition-colors hover:border-neutral-700 focus-within:border-neutral-600"
+              className="flex h-8 w-64 items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 text-xs text-muted-foreground transition-colors hover:border-muted-foreground/40 focus-within:border-muted-foreground/50"
               onClick={(event) => event.stopPropagation()}
             >
               <Search size={13} className="shrink-0" />
@@ -370,23 +396,23 @@ export function CRMHeader({
                   }
                 }}
                 placeholder="Search everything..."
-                className="h-full w-full bg-transparent text-xs text-neutral-200 outline-none placeholder:text-neutral-500"
+                className="h-full w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
               />
-              <span className="shrink-0 rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-500">Ctrl/Cmd + K</span>
+              <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">Ctrl/Cmd + K</span>
             </div>
 
             {isSearchOpen && (
               <div
-                className="absolute left-0 top-10 z-50 w-120 overflow-hidden rounded-xl border border-neutral-800 bg-[#0f0f0f] shadow-2xl"
+                className="absolute left-0 top-10 z-50 w-120 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="max-h-96 overflow-y-auto">
                   {searchQuery.trim().length < 2 ? (
-                    <p className="px-3 py-5 text-center text-sm text-neutral-400">Type at least 2 characters</p>
+                    <p className="px-3 py-5 text-center text-sm text-muted-foreground">Type at least 2 characters</p>
                   ) : isSearchLoading ? (
-                    <p className="px-3 py-5 text-center text-sm text-neutral-400">Searching...</p>
+                    <p className="px-3 py-5 text-center text-sm text-muted-foreground">Searching...</p>
                   ) : searchResults.length === 0 ? (
-                    <p className="px-3 py-5 text-center text-sm text-neutral-400">No matches found</p>
+                    <p className="px-3 py-5 text-center text-sm text-muted-foreground">No matches found</p>
                   ) : (
                     searchResults.map((result) => (
                       <button
@@ -396,14 +422,14 @@ export function CRMHeader({
                           setIsSearchOpen(false)
                           onSearchNavigate(result.actionUrl)
                         }}
-                        className="block w-full border-b border-neutral-900 px-3 py-2 text-left transition-colors hover:bg-neutral-900/70"
+                        className="block w-full border-b border-border px-3 py-2 text-left transition-colors hover:bg-muted"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-medium text-neutral-100">{result.title}</p>
-                          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-neutral-400">{result.type}</span>
+                          <p className="text-sm font-medium text-foreground">{result.title}</p>
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{result.type}</span>
                         </div>
-                        <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{result.subtitle}</p>
-                        {result.meta && <p className="mt-1 text-[11px] text-neutral-500">{result.meta}</p>}
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{result.subtitle}</p>
+                        {result.meta && <p className="mt-1 text-[11px] text-muted-foreground">{result.meta}</p>}
                       </button>
                     ))
                   )}
@@ -412,32 +438,11 @@ export function CRMHeader({
             )}
           </div>
 
-          <div className="hidden md:flex items-center rounded-xl border border-neutral-500/80 px-3 py-1.5 text-xs text-neutral-100">
-            <div className="pr-3 leading-tight">
-              <p className="font-medium tracking-[0.06em]">{dateLine}</p>
-            </div>
-            <div className="h-8 w-px bg-neutral-600" />
-            <div className="pl-3 leading-tight">
-              {weatherDisplay && weather ? (
-                <>
-                  <p className="font-medium">{Math.round(weather.temperatureC)}°C</p>
-                  <p className="flex items-center gap-1 text-neutral-300">
-                    <weatherDisplay.Icon size={12} />
-                    <span>{weatherDisplay.label}</span>
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium">--°C</p>
-                  <p className="text-neutral-400">waiting location...</p>
-                </>
-              )}
-            </div>
-          </div>
+          <ThemeSwitch theme={theme} onToggle={toggleTheme} className="hover:bg-muted" />
 
           <button
             type="button"
-            className="relative flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800"
+            className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-foreground transition-opacity hover:opacity-80 hover:bg-muted"
             aria-label="Notifications"
             aria-expanded={isNotificationsOpen}
             onClick={(event) => {
@@ -452,20 +457,20 @@ export function CRMHeader({
 
           {isNotificationsOpen && (
             <div
-              className="absolute right-20 top-11 z-50 w-80 overflow-hidden rounded-xl border border-neutral-800 bg-[#0f0f0f] shadow-2xl"
+              className="absolute right-20 top-11 z-50 w-80 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium text-neutral-200">Notifications</p>
-                  <p className="text-[11px] text-neutral-500">{unreadCount} unread</p>
+                  <p className="text-sm font-medium text-foreground">Notifications</p>
+                  <p className="text-[11px] text-muted-foreground">{unreadCount} unread</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     void markAllAsRead()
                   }}
-                  className="text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-400 transition-colors hover:text-neutral-200"
+                  className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-foreground"
                 >
                   Mark all read
                 </button>
@@ -473,9 +478,9 @@ export function CRMHeader({
 
               <div className="max-h-96 overflow-y-auto">
                 {isLoadingNotifications ? (
-                  <p className="px-3 py-6 text-center text-sm text-neutral-400">Loading notifications...</p>
+                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">Loading notifications...</p>
                 ) : notifications.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-sm text-neutral-400">No notifications yet</p>
+                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">No notifications yet</p>
                 ) : (
                   notifications.map((item) => (
                     <button
@@ -488,14 +493,14 @@ export function CRMHeader({
                         setIsNotificationsOpen(false)
                         onNotificationNavigate(item.actionUrl)
                       }}
-                      className="block w-full border-b border-neutral-900 px-3 py-2 text-left transition-colors hover:bg-neutral-900/60"
+                      className="block w-full border-b border-border px-3 py-2 text-left transition-colors hover:bg-muted"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <p className={`text-sm ${item.isRead ? 'text-neutral-300' : 'text-neutral-100 font-medium'}`}>{item.title}</p>
+                        <p className={`text-sm ${item.isRead ? 'text-muted-foreground' : 'text-foreground font-medium'}`}>{item.title}</p>
                         {!item.isRead && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />}
                       </div>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{item.message}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">{formatRelativeTime(item.createdAt)}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.message}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{formatRelativeTime(item.createdAt)}</p>
                     </button>
                   ))
                 )}
@@ -506,7 +511,7 @@ export function CRMHeader({
           <div className="relative">
             <button
               type="button"
-              className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors duration-150 hover:bg-neutral-800"
+              className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors duration-150 hover:bg-muted"
               aria-label="User menu"
               aria-expanded={isMenuOpen}
               onClick={(event) => {
@@ -518,27 +523,27 @@ export function CRMHeader({
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600">
                 <span className="text-white text-xs font-semibold">{userInitials}</span>
               </div>
-              <span className="text-neutral-300 text-sm hidden sm:block">{userName}</span>
-              <ChevronDown size={13} className="hidden text-neutral-500 sm:block" />
+              <span className="text-muted-foreground text-sm hidden sm:block">{userName}</span>
+              <ChevronDown size={13} className="hidden text-muted-foreground sm:block" />
             </button>
 
             {isMenuOpen && (
               <div
-                className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-xl border border-neutral-800 bg-[#0f0f0f] p-1 shadow-2xl"
+                className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground p-1 shadow-2xl"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="px-2 py-2">
-                  <p className="truncate text-sm font-medium text-neutral-200">{userName}</p>
-                  <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-neutral-500">{activeSection}</p>
+                  <p className="truncate text-sm font-medium text-foreground">{userName}</p>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{activeSection}</p>
                 </div>
-                <div className="my-1 h-px bg-neutral-800" />
+                <div className="my-1 h-px bg-border" />
                 <button
                   type="button"
                   onClick={() => {
                     setIsMenuOpen(false)
                     onViewProfile()
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <User size={14} />
                   View profile

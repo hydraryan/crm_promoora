@@ -465,9 +465,9 @@ const transitionStyle = {
 
 function buttonBase(isActive: boolean): string {
   return [
-    'flex h-10 w-10 items-center justify-center rounded-lg text-neutral-400',
+    'flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground',
     'transition-colors duration-300',
-    isActive ? 'bg-[#1f1f1f] text-neutral-50' : 'hover:bg-[#1a1a1a] hover:text-neutral-200',
+    isActive ? 'bg-muted text-foreground' : 'hover:bg-muted/70 hover:text-foreground',
   ].join(' ')
 }
 
@@ -475,7 +475,7 @@ function detailButtonClass(isActive: boolean): string {
   return [
     'group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left',
     'transition-colors duration-300',
-    isActive ? 'bg-[#1f1f1f] text-neutral-50' : 'text-neutral-300 hover:bg-[#1a1a1a]',
+    isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
   ].join(' ')
 }
 
@@ -577,9 +577,9 @@ export function PromoosaSidebar({
   }, [activeItemId])
 
   return (
-    <aside className="flex h-full shrink-0 text-[#fafafa]">
-      <div className="flex h-full flex-row overflow-hidden bg-[#000000]">
-        <div className="flex h-full w-16 shrink-0 flex-col items-center bg-[#000000] py-4">
+    <aside className="flex h-full shrink-0 text-foreground transition-colors duration-300">
+      <div className="flex h-full flex-row overflow-hidden bg-card transition-colors duration-300">
+        <div className="flex h-full w-16 shrink-0 flex-col items-center bg-card py-4 transition-colors duration-300">
           <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto px-2">
             {visibleRailSections.map((section) => (
               <button
@@ -609,12 +609,12 @@ export function PromoosaSidebar({
         </div>
 
         <div
-          className="flex h-full flex-col overflow-hidden bg-[#000000]"
+          className="flex h-full flex-col overflow-hidden bg-card transition-colors duration-300"
           style={{
             ...transitionStyle,
             width: isDetailCollapsed ? '0px' : '280px',
             opacity: isDetailCollapsed ? 0 : 1,
-            borderRight: '0px solid transparent',
+            borderRight: '1px solid var(--border)',
             pointerEvents: isDetailCollapsed ? 'none' : 'auto',
           }}
           data-has-expanded-items={expandedItems.size > 0 ? 'true' : 'false'}
@@ -622,7 +622,7 @@ export function PromoosaSidebar({
           <div className="flex-1 overflow-y-auto p-4">
             {currentSection.groups.map((group) => (
               <div key={group.id} className="mb-4">
-                <p className="mb-2 px-2 text-[12px] font-normal uppercase tracking-[0.08em] text-[#525252]">{group.label}</p>
+                <p className="mb-2 px-2 text-[12px] font-normal uppercase tracking-[0.08em] text-muted-foreground">{group.label}</p>
                 <div className="space-y-1">
                   {group.items
                     .filter((item) => canSeeMenuItem(item.id, sectionForRender))
@@ -642,12 +642,12 @@ export function PromoosaSidebar({
                           if (hasSubItems) onToggleExpand(item.id)
                         }}
                       >
-                        <Icon size={16} className="shrink-0 text-neutral-400 group-hover:text-neutral-200" />
+                        <Icon size={16} className="shrink-0 text-muted-foreground group-hover:text-foreground" />
                         <span className="truncate text-[14px] font-normal">{item.label}</span>
                         {hasSubItems && (
                           <ChevronDown
                             size={14}
-                            className="ml-auto text-neutral-500"
+                            className="ml-auto text-muted-foreground"
                             style={{
                               ...transitionStyle,
                               transform: itemExpanded ? 'rotate(180deg)' : 'rotate(0deg)',

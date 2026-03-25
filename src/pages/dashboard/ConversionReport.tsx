@@ -91,9 +91,26 @@ export default function ConversionReport() {
       <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
         <div className="text-center space-y-2">
           <p className="text-[#52525b] text-sm">{error}</p>
-          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-            Try again
-          </button>
+          <div className="flex items-center justify-center gap-4">
+            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
+              Try again
+            </button>
+            {error.toLowerCase().includes('session expired') && (
+              <button
+                onClick={() => {
+                  localStorage.removeItem('crm_access_token')
+                  localStorage.removeItem('crm_refresh_token')
+                  localStorage.removeItem('crm_user')
+                  sessionStorage.removeItem('crm_portal_secure_session')
+                  window.location.reload()
+                }}
+                className="text-sm text-[#ef4444] hover:text-[#f87171]"
+                type="button"
+              >
+                Log out
+              </button>
+            )}
+          </div>
         </div>
       </div>
     )

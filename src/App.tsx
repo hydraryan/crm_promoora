@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CRMHeader } from '@/components/ui/crm-header'
 import { PromoosaSidebar } from '@/components/ui/promoora-sidebar'
 import { PermissionProvider } from '@/context/PermissionContext'
+import { ThemeProvider } from '@/context/ThemeContext'
 import { usePermissions } from '@/context/PermissionContext'
 import { apiFetch } from '@/utils/apiFetch'
 import DemoOne from './demo'
@@ -490,7 +491,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
   }
 
   return (
-    <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#0d0d0d]">
+    <main className="dashboard-theme flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
       <CRMHeader
         isDetailCollapsed={isDetailCollapsed}
         onToggleCollapse={() => setIsDetailCollapsed((prev) => !prev)}
@@ -530,7 +531,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
             setActiveItemId(itemId)
           }}
         />
-        <main className="flex-1 overflow-y-auto bg-[#0d0d0d] p-6">{renderMainContent()}</main>
+        <main className="flex-1 overflow-y-auto bg-background p-6 transition-colors duration-300">{renderMainContent()}</main>
       </div>
     </main>
   )
@@ -542,6 +543,12 @@ function App() {
     const hasToken = Boolean(localStorage.getItem('crm_access_token') ?? localStorage.getItem('accessToken'))
     return hasSession && hasToken
   })
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      document.documentElement.classList.remove('light')
+    }
+  }, [isAuthenticated])
 
   const handleAuthenticated = () => {
     sessionStorage.setItem(SESSION_KEY, 'authenticated')
@@ -555,9 +562,11 @@ function App() {
 
   if (isAuthenticated) {
     return (
-      <PermissionProvider>
-        <ProtectedDashboard onLogout={handleLogout} />
-      </PermissionProvider>
+      <ThemeProvider>
+        <PermissionProvider>
+          <ProtectedDashboard onLogout={handleLogout} />
+        </PermissionProvider>
+      </ThemeProvider>
     )
   }
 

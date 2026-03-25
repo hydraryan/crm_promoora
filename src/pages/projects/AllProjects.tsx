@@ -112,9 +112,26 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
       <div className="flex min-h-full items-center justify-center bg-[#0a0a0a] px-8 py-7">
         <div className="space-y-2 text-center">
           <p className="text-sm text-[#52525b]">{error}</p>
-          <button onClick={refetch} className="text-sm text-[#6366f1] hover:text-[#818cf8]">
-            Try again
-          </button>
+          <div className="flex items-center justify-center gap-4">
+            <button onClick={refetch} className="text-sm text-[#6366f1] hover:text-[#818cf8]" type="button">
+              Try again
+            </button>
+            {error.toLowerCase().includes('session expired') && (
+              <button
+                onClick={() => {
+                  localStorage.removeItem('crm_access_token')
+                  localStorage.removeItem('crm_refresh_token')
+                  localStorage.removeItem('crm_user')
+                  sessionStorage.removeItem('crm_portal_secure_session')
+                  window.location.reload()
+                }}
+                className="text-sm text-[#ef4444] hover:text-[#f87171]"
+                type="button"
+              >
+                Log out
+              </button>
+            )}
+          </div>
         </div>
       </div>
     )
