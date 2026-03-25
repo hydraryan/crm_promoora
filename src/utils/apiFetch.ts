@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
+import { beginGlobalLoading, endGlobalLoading } from '@/context/LoadingContext'
 
 async function doFetch(path: string, options?: RequestInit, token?: string) {
   return fetch(`${API_BASE}${path}`, {
@@ -40,34 +41,39 @@ function clearAuthState() {
 }
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('crm_access_token') ?? localStorage.getItem('accessToken') ?? undefined
+  beginGlobalLoading()
+  try {
+    const token = localStorage.getItem('crm_access_token') ?? localStorage.getItem('accessToken') ?? undefined
 
-  let response = await doFetch(path, options, token)
+    let response = await doFetch(path, options, token)
 
-  // Access token expired/invalid: try one refresh flow then retry once.
-  if (response.status === 403 || response.status === 401) {
-    const newAccessToken = await tryRefreshAccessToken()
-    if (newAccessToken) {
-      response = await doFetch(path, options, newAccessToken)
+    // Access token expired/invalid: try one refresh flow then retry once.
+    if (response.status === 403 || response.status === 401) {
+      const newAccessToken = await tryRefreshAccessToken()
+      if (newAccessToken) {
+        response = await doFetch(path, options, newAccessToken)
+      }
     }
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearAuthState()
+        throw new Error(`Session expired. Please sign in again. (${response.status})`)
+      }
+
+      let backendMessage = ''
+      try {
+        const errorBody = (await response.json()) as { error?: string; message?: string }
+        backendMessage = errorBody.error ?? errorBody.message ?? ''
+      } catch {
+        // Ignore non-JSON error bodies.
+      }
+
+      throw new Error(backendMessage ? `API error ${response.status}: ${backendMessage}` : `API error ${response.status}: ${path}`)
+    }
+
+    return response.json() as Promise<T>
+  } finally {
+    endGlobalLoading()
   }
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      clearAuthState()
-      throw new Error(`Session expired. Please sign in again. (${response.status})`)
-    }
-
-    let backendMessage = ''
-    try {
-      const errorBody = (await response.json()) as { error?: string; message?: string }
-      backendMessage = errorBody.error ?? errorBody.message ?? ''
-    } catch {
-      // Ignore non-JSON error bodies.
-    }
-
-    throw new Error(backendMessage ? `API error ${response.status}: ${backendMessage}` : `API error ${response.status}: ${path}`)
-  }
-
-  return response.json() as Promise<T>
 }

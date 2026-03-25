@@ -115,7 +115,17 @@ export default function ConversionReport() {
       </div>
     )
 
-  if (!data) return null
+  if (!data)
+    return (
+      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-[#52525b] text-sm">No conversion data available yet.</p>
+          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
+            Reload
+          </button>
+        </div>
+      </div>
+    )
 
   const latestMonth = data.months[data.months.length - 1]
   const totalDealsWon = data.months.reduce((sum, month) => sum + month.dealsWon, 0)

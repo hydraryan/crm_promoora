@@ -3,7 +3,9 @@ import { CRMHeader } from '@/components/ui/crm-header'
 import { PromoosaSidebar } from '@/components/ui/promoora-sidebar'
 import { PermissionProvider } from '@/context/PermissionContext'
 import { ThemeProvider } from '@/context/ThemeContext'
+import { LoadingProvider } from '@/context/LoadingContext'
 import { usePermissions } from '@/context/PermissionContext'
+import { GlobalLoadingBar } from '@/components/ui/loading-bar'
 import { apiFetch } from '@/utils/apiFetch'
 import DemoOne from './demo'
 import DashboardPage from './pages/dashboard.tsx'
@@ -492,6 +494,7 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
 
   return (
     <main className="dashboard-theme flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
+      <GlobalLoadingBar />
       <CRMHeader
         isDetailCollapsed={isDetailCollapsed}
         onToggleCollapse={() => setIsDetailCollapsed((prev) => !prev)}
@@ -563,9 +566,11 @@ function App() {
   if (isAuthenticated) {
     return (
       <ThemeProvider>
-        <PermissionProvider>
-          <ProtectedDashboard onLogout={handleLogout} />
-        </PermissionProvider>
+        <LoadingProvider>
+          <PermissionProvider>
+            <ProtectedDashboard onLogout={handleLogout} />
+          </PermissionProvider>
+        </LoadingProvider>
       </ThemeProvider>
     )
   }
