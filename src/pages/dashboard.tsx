@@ -1,70 +1,126 @@
 import { Plus } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { usePermissions } from '@/context/PermissionContext'
+import { apiFetch } from '@/utils/apiFetch'
+import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
 interface DashboardPageProps {
   userName: string
   onQuickAction?: (actionId: 'lead' | 'follow-up' | 'proposal' | 'client') => void
 }
 
-const mockStats = {
-  totalLeads: 24,
-  leadsAddedThisWeek: 3,
-  activeClients: 3,
-  clientsOnboarding: 2,
-  openProposals: 7,
-  proposalsOverdue: 2,
-  followUpsToday: 5,
-  followUpsOverdue: 2,
+interface LeadItem {
+  _id: string
+  businessName: string
+  ownerName: string
+  stage: string
+  createdAt: string
+  lastActivityAt: string
+  assignedTo: {
+    _id: string
+    name: string
+  }
 }
 
-const mockPipeline = [
-  { stage: 'Cold', count: 8, color: '#525252' },
-  { stage: 'Contacted', count: 6, color: '#3b82f6' },
-  { stage: 'Meeting', count: 4, color: '#8b5cf6' },
-  { stage: 'Proposal sent', count: 3, color: '#f59e0b' },
-  { stage: 'Negotiation', count: 2, color: '#f97316' },
-  { stage: 'Won', count: 1, color: '#10b981' },
-]
+interface LeadsResponse {
+  leads: LeadItem[]
+  total: number
+}
 
-const mockTodayFollowUps = [
-  { id: 1, business: 'Hotel Spice Garden', owner: 'Rajiv Sharma', type: 'call', assigned: 'Priya', overdue: true },
-  { id: 2, business: 'City Bakery', owner: 'Anand Kumar', type: 'whatsapp', assigned: 'Rahul', overdue: true },
-  { id: 3, business: 'Tanvi Beauty Salon', owner: 'Tanvi Kapoor', type: 'walk-in', assigned: 'Priya', overdue: false },
-  { id: 4, business: 'Sunrise Pharmacy', owner: 'Deepak Jain', type: 'call', assigned: 'Arjun', overdue: false },
-  { id: 5, business: 'Gupta Hardware', owner: 'Ramesh Gupta', type: 'whatsapp', assigned: 'Rahul', overdue: false },
-]
+interface ClientItem {
+  _id: string
+  businessName: string
+  ownerName: string
+  status: 'Onboarding' | 'Active' | 'Inactive'
+}
 
-const mockActivity = [
-  { id: 1, actor: 'Priya', initials: 'PA', action: 'added a note on', target: 'Hotel Spice Garden', time: '2h ago', type: 'note' },
-  { id: 2, actor: 'Rahul', initials: 'RN', action: 'created a new lead -', target: 'City Bakery', time: '4h ago', type: 'lead' },
-  { id: 3, actor: 'Arjun', initials: 'AV', action: 'sent a proposal to', target: 'Dr. Mehta Clinic', time: '5h ago', type: 'proposal' },
-  { id: 4, actor: 'Priya', initials: 'PA', action: 'moved', target: 'Tanvi Beauty Salon', time: '1d ago', type: 'status' },
-  { id: 5, actor: 'Rahul', initials: 'RN', action: 'completed follow-up -', target: 'Hotel Spice Garden', time: '1d ago', type: 'followup' },
-  { id: 6, actor: 'Arjun', initials: 'AV', action: 'created a new lead -', target: 'Sunrise Pharmacy', time: '2d ago', type: 'lead' },
-  { id: 7, actor: 'Priya', initials: 'PA', action: 'sent a proposal to', target: 'Gupta Hardware', time: '2d ago', type: 'proposal' },
-  { id: 8, actor: 'Rahul', initials: 'RN', action: 'added a note on', target: 'City Bakery', time: '3d ago', type: 'note' },
-]
+interface ClientsResponse {
+  clients: ClientItem[]
+  total: number
+}
 
-const mockProposals = [
-  { id: 1, business: 'Dr. Mehta Clinic', value: '₹18,000', sentDaysAgo: 6, status: 'awaiting' },
-  { id: 2, business: 'Tanvi Beauty Salon', value: '₹12,500', sentDaysAgo: 3, status: 'awaiting' },
-  { id: 3, business: 'The Dhaba Corner', value: '₹9,000', sentDaysAgo: 8, status: 'overdue' },
-  { id: 4, business: 'Gupta Hardware', value: '₹22,000', sentDaysAgo: 1, status: 'sent' },
-]
+interface ProposalItem {
+  _id: string
+  proposalNumber: string
+  title: string
+  status: 'Draft' | 'Sent' | 'Awaiting response' | 'Accepted' | 'Rejected'
+  sentAt?: string
+  createdAt: string
+  lead?: { businessName: string }
+  client?: { businessName: string }
+}
 
-const mockTeam = [
-  { name: 'Priya Anand', initials: 'PA', leadsContacted: 12, proposalsSent: 4, followUpsDone: 9, top: true },
-  { name: 'Arjun Verma', initials: 'AV', leadsContacted: 9, proposalsSent: 3, followUpsDone: 7, top: false },
-  { name: 'Rahul Nair', initials: 'RN', leadsContacted: 7, proposalsSent: 2, followUpsDone: 5, top: false },
-]
+interface ProposalsResponse {
+  proposals: ProposalItem[]
+  total: number
+}
 
-const mockUpcoming = [
-  { id: 1, business: 'The Dhaba Corner', type: 'call', assigned: 'Arjun', dueDate: 'Tomorrow' },
-  { id: 2, business: 'Sunrise Pharmacy', type: 'walk-in', assigned: 'Priya', dueDate: 'Tomorrow' },
-  { id: 3, business: 'Metro Mobile Shop', type: 'whatsapp', assigned: 'Rahul', dueDate: 'In 2 days' },
-  { id: 4, business: 'Kapoor Sweets', type: 'call', assigned: 'Arjun', dueDate: 'In 3 days' },
-]
+interface FollowUpItem {
+  _id: string
+  businessName: string
+  ownerName: string
+  type: string
+  dueAt: string
+  isDone: boolean
+  isOverdue: boolean
+  assignedTo: {
+    _id: string
+    name: string
+  }
+}
+
+interface FollowUpsResponse {
+  followups: FollowUpItem[]
+  total: number
+  overdueCount: number
+}
+
+interface TodayActivityItem {
+  _id: string
+  actor: { name: string; initials: string }
+  type: string
+  description: string
+  targetName: string
+  createdAt: string
+}
+
+interface TodayActivityResponse {
+  activities: TodayActivityItem[]
+  totalToday: number
+}
+
+interface StageSummary {
+  name: string
+  count: number
+}
+
+interface PipelineSummaryResponse {
+  totalLeads: number
+  stages: StageSummary[]
+}
+
+interface BdPerformanceMember {
+  _id: string
+  name: string
+  initials: string
+  leadsContacted: number
+  proposalsSent: number
+}
+
+interface BdPerformanceResponse {
+  members: BdPerformanceMember[]
+}
+
+interface DashboardData {
+  leads: LeadsResponse
+  clients: ClientsResponse
+  proposals: ProposalsResponse
+  followupsToday: FollowUpsResponse
+  followupsUpcoming: FollowUpsResponse
+  activity: TodayActivityResponse
+  pipeline: PipelineSummaryResponse
+  team: BdPerformanceResponse | null
+}
 
 const quickActions = [
   { id: 'lead', label: 'Add lead', module: 'leads' },
@@ -80,10 +136,6 @@ function getGreeting(): string {
   return 'Good evening'
 }
 
-function normalizeName(name: string): string {
-  return name.trim().toLowerCase()
-}
-
 function animationStyle(delayMs: number): CSSProperties {
   return {
     animationDelay: `${delayMs}ms`,
@@ -91,63 +143,201 @@ function animationStyle(delayMs: number): CSSProperties {
   }
 }
 
-function proposalAssignee(id: number): string {
-  const assignmentOrder = ['Priya', 'Rahul', 'Arjun']
-  return assignmentOrder[(id - 1) % assignmentOrder.length]
+function followupTypeLabel(type: string): string {
+  if (type === 'Phone call' || type === 'call') return 'call'
+  if (type === 'Walk-in' || type === 'walk-in') return 'walk-in'
+  return 'whatsapp'
+}
+
+function dueLabel(iso: string): string {
+  const now = new Date()
+  const due = new Date(iso)
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(today.getDate() + 1)
+  const dueDay = new Date(due)
+  dueDay.setHours(0, 0, 0, 0)
+
+  if (dueDay.getTime() < today.getTime()) return 'Overdue'
+  if (dueDay.getTime() === today.getTime()) return 'Today'
+  if (dueDay.getTime() === tomorrow.getTime()) return 'Tomorrow'
+
+  const days = Math.ceil((dueDay.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+  return `In ${days} days`
+}
+
+function sentDaysAgo(sentAt?: string, createdAt?: string): number {
+  const source = sentAt ?? createdAt
+  if (!source) return 0
+  const diff = Date.now() - new Date(source).getTime()
+  return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)))
 }
 
 export default function DashboardPage({ userName, onQuickAction }: DashboardPageProps) {
   const { permissions } = usePermissions()
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const canView = (module: string) => Boolean(permissions?.[module]?.view)
   const canCreate = (module: string) => Boolean(permissions?.[module]?.create)
 
-  // Personal scope is applied for creator-level users without team management permissions.
-  const shouldUsePersonalScope = !canCreate('team') && (canCreate('leads') || canCreate('followups') || canCreate('proposals'))
-
-  const roleName = normalizeName(userName)
-  const pipelineTotal = mockPipeline.reduce((sum, stage) => sum + stage.count, 0)
-
-  const visibleQuickActions = quickActions.filter((action) => canCreate(action.module))
-
-  const statCards = [
-    { key: 'leads', label: 'Total leads', value: mockStats.totalLeads, trend: `+${mockStats.leadsAddedThisWeek} this week` },
-    { key: 'clients', label: 'Active clients', value: mockStats.activeClients, trend: `${mockStats.clientsOnboarding} onboarding` },
-    { key: 'proposals', label: 'Open proposals', value: mockStats.openProposals, trend: `${mockStats.proposalsOverdue} need follow-up` },
-    { key: 'followups', label: 'Follow-ups today', value: mockStats.followUpsToday, trend: `${mockStats.followUpsOverdue} overdue` },
-  ]
-
-  const visibleStatCards = statCards.filter((card) => canView(card.key))
-
-  const todayFollowUps = shouldUsePersonalScope ? mockTodayFollowUps.filter((item) => normalizeName(item.assigned) === roleName) : mockTodayFollowUps
-
-  const sortedFollowUps = [...todayFollowUps].sort((a, b) => Number(b.overdue) - Number(a.overdue))
-
   const showActivity = canView('team') && (canCreate('leads') || canCreate('followups') || canCreate('proposals'))
-  const visibleActivity = showActivity
-    ? shouldUsePersonalScope
-      ? mockActivity.filter((item) => normalizeName(item.actor) === roleName)
-      : mockActivity
-    : []
-
   const showProposals = canView('proposals') && canCreate('proposals')
-  const visibleProposals = showProposals
-    ? shouldUsePersonalScope
-      ? mockProposals.filter((proposal) => normalizeName(proposalAssignee(proposal.id)) === roleName)
-      : mockProposals
-    : []
-
   const showFollowUps = canView('followups') && canCreate('followups')
-  const visibleUpcoming = showFollowUps
-    ? shouldUsePersonalScope
-      ? mockUpcoming.filter((item) => normalizeName(item.assigned) === roleName)
-      : mockUpcoming
-    : []
-
   const showPipeline = canView('leads')
   const showTeam = canView('team') && canCreate('team')
   const showFunnel = canView('leads') && canView('proposals')
   const showUpcoming = showFollowUps
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const [leads, clients, proposals, followupsToday, followupsUpcoming, activity, pipeline, team] = await Promise.all([
+        apiFetch<LeadsResponse>('/leads?stage=all'),
+        apiFetch<ClientsResponse>('/clients'),
+        apiFetch<ProposalsResponse>('/proposals'),
+        apiFetch<FollowUpsResponse>('/followups/today'),
+        apiFetch<FollowUpsResponse>('/followups?view=upcoming'),
+        apiFetch<TodayActivityResponse>('/activity/today'),
+        apiFetch<PipelineSummaryResponse>('/leads/pipeline-summary'),
+        showTeam ? apiFetch<BdPerformanceResponse>('/reports/bd-performance') : Promise.resolve(null),
+      ])
+
+      setData({
+        leads,
+        clients,
+        proposals,
+        followupsToday,
+        followupsUpcoming,
+        activity,
+        pipeline,
+        team,
+      })
+    } catch {
+      setError('Failed to load dashboard overview data')
+    } finally {
+      setLoading(false)
+    }
+  }, [showTeam])
+
+  useEffect(() => {
+    void fetchData()
+  }, [fetchData])
+
+  const visibleQuickActions = quickActions.filter((action) => canCreate(action.module))
+
+  const metrics = useMemo(() => {
+    if (!data) {
+      return {
+        leadsAddedThisWeek: 0,
+        activeClients: 0,
+        clientsOnboarding: 0,
+        openProposals: 0,
+        proposalsOverdue: 0,
+        followUpsPending: 0,
+      }
+    }
+
+    const weekStart = new Date()
+    weekStart.setHours(0, 0, 0, 0)
+    weekStart.setDate(weekStart.getDate() - 7)
+
+    const leadsAddedThisWeek = data.leads.leads.filter((lead) => new Date(lead.createdAt) >= weekStart).length
+    const activeClients = data.clients.clients.filter((client) => client.status === 'Active').length
+    const clientsOnboarding = data.clients.clients.filter((client) => client.status === 'Onboarding').length
+
+    const openProposalsRows = data.proposals.proposals.filter(
+      (proposal) => proposal.status === 'Draft' || proposal.status === 'Sent' || proposal.status === 'Awaiting response',
+    )
+
+    const proposalsOverdue = openProposalsRows.filter((proposal) => {
+      if (!proposal.sentAt) return false
+      const ageInDays = Math.floor((Date.now() - new Date(proposal.sentAt).getTime()) / (24 * 60 * 60 * 1000))
+      return ageInDays >= 5
+    }).length
+
+    const followUpsPending = data.followupsToday.followups.filter((row) => !row.isDone).length
+
+    return {
+      leadsAddedThisWeek,
+      activeClients,
+      clientsOnboarding,
+      openProposals: openProposalsRows.length,
+      proposalsOverdue,
+      followUpsPending,
+    }
+  }, [data])
+
+  if (loading)
+    return (
+      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-4">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="bg-[#111111] rounded-2xl h-24 animate-pulse" />
+        ))}
+      </div>
+    )
+
+  if (error)
+    return (
+      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-[#52525b] text-sm">{error}</p>
+          <div className="flex items-center justify-center gap-4">
+            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
+              Try again
+            </button>
+            {error.toLowerCase().includes('session expired') && (
+              <button
+                onClick={() => {
+                  localStorage.removeItem('crm_access_token')
+                  localStorage.removeItem('crm_refresh_token')
+                  localStorage.removeItem('crm_user')
+                  sessionStorage.removeItem('crm_portal_secure_session')
+                  window.location.reload()
+                }}
+                className="text-sm text-[#ef4444] hover:text-[#f87171]"
+                type="button"
+              >
+                Log out
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+
+  if (!data)
+    return (
+      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-[#52525b] text-sm">No dashboard data available yet.</p>
+          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
+            Reload
+          </button>
+        </div>
+      </div>
+    )
+
+  const pipelineStages = data.pipeline.stages.filter((stage) => stage.name !== 'Lost')
+  const pipelineTotal = pipelineStages.reduce((sum, stage) => sum + stage.count, 0)
+  const todayFollowups = [...data.followupsToday.followups].filter((item) => !item.isDone).sort((a, b) => Number(b.isOverdue) - Number(a.isOverdue))
+  const pendingProposals = data.proposals.proposals
+    .filter((item) => item.status === 'Draft' || item.status === 'Sent' || item.status === 'Awaiting response')
+    .sort((a, b) => new Date(b.sentAt ?? b.createdAt).getTime() - new Date(a.sentAt ?? a.createdAt).getTime())
+    .slice(0, 6)
+
+  const statCards = [
+    { key: 'leads', label: 'Total leads', value: data.leads.total, trend: `+${metrics.leadsAddedThisWeek} this week` },
+    { key: 'clients', label: 'Active clients', value: metrics.activeClients, trend: `${metrics.clientsOnboarding} onboarding` },
+    { key: 'proposals', label: 'Open proposals', value: metrics.openProposals, trend: `${metrics.proposalsOverdue} need follow-up` },
+    { key: 'followups', label: 'Follow-ups today', value: metrics.followUpsPending, trend: `${data.followupsToday.overdueCount} overdue` },
+  ]
+
+  const visibleStatCards = statCards.filter((card) => canView(card.key))
 
   return (
     <div className="min-h-full space-y-6 bg-[#0a0a0a] px-4 py-5 font-['Geist','IBM_Plex_Sans','DM_Sans',ui-sans-serif,sans-serif] sm:px-6 sm:py-6 lg:space-y-8 lg:px-8 lg:py-7">
@@ -176,7 +366,7 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
 
       <div
         className={`animate-fadeUp grid gap-4 ${
-          visibleStatCards.length === 4 ? 'grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'
+          visibleStatCards.length === 4 ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'
         }`}
         style={animationStyle(60)}
       >
@@ -208,16 +398,13 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
             </div>
 
             <div className="space-y-3">
-              {mockPipeline.map((stage) => {
-                const pct = (stage.count / pipelineTotal) * 100
+              {pipelineStages.map((stage) => {
+                const pct = pipelineTotal > 0 ? (stage.count / pipelineTotal) * 100 : 0
                 return (
-                  <div key={stage.stage} className="flex items-center gap-4">
-                    <p className="w-22 shrink-0 text-[12px] text-[#52525b] sm:w-28">{stage.stage}</p>
+                  <div key={stage.name} className="flex items-center gap-4">
+                    <p className="w-22 shrink-0 text-[12px] text-[#52525b] sm:w-28">{stage.name}</p>
                     <div className="h-0.75 flex-1 overflow-hidden rounded-full bg-[#1a1a1a]">
-                      <div
-                        className="h-full rounded-full bg-[#6366f1] transition-all duration-700"
-                        style={{ width: `${pct}%`, opacity: 0.3 + (stage.count / pipelineTotal) * 0.7 }}
-                      />
+                      <div className="h-full rounded-full bg-[#6366f1] transition-all duration-700" style={{ width: `${pct}%` }} />
                     </div>
                     <p className="w-6 shrink-0 text-right font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[12px] text-[#71717a] sm:w-4">
                       {stage.count}
@@ -231,15 +418,15 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
       )}
 
       {(showFollowUps || showActivity || showProposals || showTeam || showFunnel || showUpcoming) && (
-        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-5">
-          <div className="animate-fadeUp space-y-6 2xl:col-span-3" style={animationStyle(180)}>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+          <div className="animate-fadeUp space-y-6 xl:col-span-3" style={animationStyle(180)}>
             {showFollowUps && (
               <div className="rounded-2xl bg-[#111111] p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <p className="text-[13px] font-medium text-[#a1a1aa]">Today</p>
                     <span className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
-                      {sortedFollowUps.length}
+                      {todayFollowups.length}
                     </span>
                   </div>
                   <button type="button" className="text-[11px] text-[#52525b] transition-colors hover:text-[#a1a1aa]">
@@ -248,19 +435,19 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
                 </div>
 
                 <div className="space-y-px">
-                  {sortedFollowUps.map((item) => (
+                  {todayFollowups.map((item) => (
                     <div
-                      key={item.id}
+                      key={item._id}
                       className="group flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors duration-150 hover:bg-[#1a1a1a] sm:gap-4"
                     >
-                      <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.overdue ? 'bg-[#ef4444]' : 'bg-[#3f3f46]'}`} />
+                      <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.isOverdue ? 'bg-[#ef4444]' : 'bg-[#3f3f46]'}`} />
 
                       <p className="flex-1 truncate text-[13px] text-[#a1a1aa] transition-colors group-hover:text-[#fafafa]">
-                        {item.business}
+                        {item.businessName}
                       </p>
 
-                      <p className="hidden shrink-0 text-[11px] text-[#52525b] sm:block">{item.type}</p>
-                      <p className="hidden w-12 shrink-0 text-right text-[11px] text-[#52525b] sm:block">{item.assigned}</p>
+                      <p className="hidden shrink-0 text-[11px] text-[#52525b] sm:block">{followupTypeLabel(item.type)}</p>
+                      <p className="hidden w-14 shrink-0 text-right text-[11px] text-[#52525b] sm:block">{item.assignedTo.name}</p>
                       <button
                         type="button"
                         className="shrink-0 text-[11px] text-[#6366f1] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
@@ -278,30 +465,30 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
                 <div className="mb-5 flex items-center justify-between">
                   <p className="text-[13px] font-medium text-[#a1a1aa]">Pending proposals</p>
                   <span className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
-                    {visibleProposals.length}
+                    {pendingProposals.length}
                   </span>
                 </div>
 
                 <div className="space-y-px">
-                  {visibleProposals.map((item) => (
-                    <div key={item.id} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a] sm:gap-4">
-                      <p className="flex-1 truncate text-[13px] text-[#a1a1aa] transition-colors group-hover:text-[#fafafa]">
-                        {item.business}
-                      </p>
-
-                      <p
-                        className={`shrink-0 font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] ${
-                          item.sentDaysAgo >= 5 ? 'text-[#f59e0b]' : 'text-[#52525b]'
-                        }`}
-                      >
-                        {item.sentDaysAgo}d
-                      </p>
-
-                      <p className="hidden shrink-0 font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[12px] text-[#71717a] sm:block">
-                        {item.value}
-                      </p>
-                    </div>
-                  ))}
+                  {pendingProposals.map((item) => {
+                    const targetBusiness = item.lead?.businessName ?? item.client?.businessName ?? item.title
+                    const age = sentDaysAgo(item.sentAt, item.createdAt)
+                    return (
+                      <div key={item._id} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a] sm:gap-4">
+                        <p className="flex-1 truncate text-[13px] text-[#a1a1aa] transition-colors group-hover:text-[#fafafa]">{targetBusiness}</p>
+                        <p
+                          className={`shrink-0 font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] ${
+                            age >= 5 ? 'text-[#f59e0b]' : 'text-[#52525b]'
+                          }`}
+                        >
+                          {age}d
+                        </p>
+                        <p className="hidden shrink-0 font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#71717a] sm:block">
+                          {item.status}
+                        </p>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -314,11 +501,12 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
                 </div>
 
                 <div className="space-y-3">
-                  {mockPipeline.map((stage, index) => {
-                    const pct = Math.round((stage.count / mockPipeline[0].count) * 100)
+                  {pipelineStages.map((stage, index) => {
+                    const baseCount = Math.max(pipelineStages[0]?.count ?? 1, 1)
+                    const pct = Math.round((stage.count / baseCount) * 100)
                     return (
-                      <div key={stage.stage} className="flex items-center gap-4">
-                        <p className="w-20 shrink-0 text-right text-[11px] text-[#52525b] sm:w-24">{stage.stage}</p>
+                      <div key={stage.name} className="flex items-center gap-4">
+                        <p className="w-20 shrink-0 text-right text-[11px] text-[#52525b] sm:w-24">{stage.name}</p>
                         <div className="h-0.5 flex-1 overflow-hidden rounded-full bg-[#1a1a1a]">
                           <div className="h-full rounded-full bg-[#6366f1]" style={{ width: `${pct}%` }} />
                         </div>
@@ -333,7 +521,7 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
             )}
           </div>
 
-          <div className="animate-fadeUp space-y-6 2xl:col-span-2" style={animationStyle(240)}>
+          <div className="animate-fadeUp space-y-6 xl:col-span-2" style={animationStyle(240)}>
             {showActivity && (
               <div className="rounded-2xl bg-[#111111] p-5">
                 <div className="mb-5 flex items-center justify-between">
@@ -344,18 +532,19 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
                 </div>
 
                 <div className="space-y-px">
-                  {visibleActivity.map((item) => (
-                    <div key={item.id} className="flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+                  {data.activity.activities.slice(0, 8).map((item) => (
+                    <div key={item._id} className="flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
                       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
-                        <span className="text-[11px] font-medium text-[#52525b]">{item.initials}</span>
+                        <span className="text-[11px] font-medium text-[#52525b]">{item.actor.initials}</span>
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <p className="text-[12px] leading-relaxed text-[#71717a]">
-                          <span className="text-[#a1a1aa]">{item.actor}</span> {item.action}{' '}
-                          <span className="text-[#a1a1aa]">{item.target}</span>
+                          <span className="text-[#a1a1aa]">{item.actor.name}</span> ·{' '}
+                          <span className="text-[#a1a1aa]">{item.targetName}</span>
                         </p>
-                        <p className="mt-0.5 text-[11px] text-[#3f3f46]">{item.time}</p>
+                        <p className="mt-0.5 text-[11px] text-[#52525b]">{item.description}</p>
+                        <p className="mt-0.5 text-[11px] text-[#3f3f46]">{formatRelativeTime(item.createdAt)}</p>
                       </div>
                     </div>
                   ))}
@@ -363,37 +552,38 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
               </div>
             )}
 
-            {showTeam && (
+            {showTeam && data.team && (
               <div className="rounded-2xl bg-[#111111] p-5">
                 <div className="mb-5 flex items-center justify-between">
                   <p className="text-[13px] font-medium text-[#a1a1aa]">BD team this month</p>
                 </div>
 
                 <div className="space-y-px">
-                  {mockTeam.map((member) => (
-                    <div key={member.name} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
-                        <span className="text-[11px] font-medium text-[#71717a]">{member.initials}</span>
+                  {[...data.team.members]
+                    .sort((a, b) => b.leadsContacted - a.leadsContacted)
+                    .slice(0, 5)
+                    .map((member, index) => (
+                      <div key={member._id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a]">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
+                          <span className="text-[11px] font-medium text-[#71717a]">{member.initials}</span>
+                        </div>
+
+                        <p className="flex-1 truncate text-[13px] text-[#a1a1aa]">{member.name}</p>
+
+                        <div className="hidden items-center gap-4 sm:flex">
+                          <p className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
+                            {member.leadsContacted}
+                            <span className="text-[#3f3f46]"> leads</span>
+                          </p>
+                          <p className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
+                            {member.proposalsSent}
+                            <span className="text-[#3f3f46]"> props</span>
+                          </p>
+                        </div>
+
+                        {index === 0 && <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#f59e0b]" />}
                       </div>
-
-                      <p className="flex-1 truncate text-[13px] text-[#a1a1aa]">{member.name}</p>
-
-                      <div className="hidden items-center gap-4 sm:flex">
-                        <p className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
-                          {member.leadsContacted}<span className="text-[#3f3f46]"> leads</span>
-                        </p>
-                        <p className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
-                          {member.proposalsSent}<span className="text-[#3f3f46]"> props</span>
-                        </p>
-                      </div>
-
-                      <p className="font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b] sm:hidden">
-                        {member.leadsContacted}L
-                      </p>
-
-                      {member.top && <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#f59e0b]" />}
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             )}
@@ -406,16 +596,19 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
                 </div>
 
                 <div className="space-y-px">
-                  {visibleUpcoming.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a] sm:gap-4">
-                      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#3f3f46]" />
-                      <p className="flex-1 truncate text-[13px] text-[#71717a]">{item.business}</p>
-                      <p className="hidden shrink-0 text-[11px] text-[#52525b] sm:block">{item.type}</p>
-                      <p className="w-16 shrink-0 text-right font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
-                        {item.dueDate}
-                      </p>
-                    </div>
-                  ))}
+                  {data.followupsUpcoming.followups
+                    .filter((item) => !item.isDone)
+                    .slice(0, 6)
+                    .map((item) => (
+                      <div key={item._id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[#1a1a1a] sm:gap-4">
+                        <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#3f3f46]" />
+                        <p className="flex-1 truncate text-[13px] text-[#71717a]">{item.businessName}</p>
+                        <p className="hidden shrink-0 text-[11px] text-[#52525b] sm:block">{followupTypeLabel(item.type)}</p>
+                        <p className="w-16 shrink-0 text-right font-['Geist_Mono','IBM_Plex_Mono','DM_Mono',ui-monospace,monospace] text-[11px] text-[#52525b]">
+                          {dueLabel(item.dueAt)}
+                        </p>
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
