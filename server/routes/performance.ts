@@ -1,4 +1,5 @@
 import { Router, type Response } from 'express'
+import { Types } from 'mongoose'
 import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
 import { Activity } from '../models/Activity.js'
 import { FollowUp } from '../models/FollowUp.js'
@@ -15,44 +16,100 @@ async function buildPerformance(userId: string) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const todayStart = new Date(now)
   todayStart.setHours(0, 0, 0, 0)
+  const userObjectId = new Types.ObjectId(userId)
 
-  const [user, monthActivities, monthFollowUpsDone, wonDeals, lostDeals] = await Promise.all([
+  const [user, monthActivityBreakdown, monthFollowUpsDone, wonDeals, lostDeals] = await Promise.all([
     User.findById(userId).populate('roleId', 'name'),
-    Activity.find({ actor: userId, createdAt: { $gte: monthStart } }).sort({ createdAt: -1 }),
+    Activity.aggregate<{ _id: string; count: number }>([
+      {
+        $match: {
+          actor: userObjectId,
+          createdAt: { $gte: monthStart },
+          type: { $in: ['lead_created', 'stage_changed', 'proposal_sent'] },
+        },
+      },
+      {
+        $group: {
+          _id: '$type',
+          count: { $sum: 1 },
+        },
+      },
+    ]),
     FollowUp.countDocuments({ assignedTo: userId, isDone: true, doneAt: { $gte: monthStart } }),
     Lead.countDocuments({ assignedTo: userId, stage: 'Won', updatedAt: { $gte: monthStart } }),
     Lead.countDocuments({ assignedTo: userId, stage: 'Lost', updatedAt: { $gte: monthStart } }),
   ])
 
-  const leadsContacted = monthActivities.filter((a) => a.type === 'lead_created' || a.type === 'stage_changed').length
-  const proposalsSent = monthActivities.filter((a) => a.type === 'proposal_sent').length
+  const monthCounts = new Map(monthActivityBreakdown.map((row) => [row._id, row.count]))
+  const leadsContacted = (monthCounts.get('lead_created') ?? 0) + (monthCounts.get('stage_changed') ?? 0)
+  const proposalsSent = monthCounts.get('proposal_sent') ?? 0
   const conversionRate = leadsContacted > 0 ? Number(((wonDeals / leadsContacted) * 100).toFixed(1)) : 0
 
-  const trend = await Promise.all(
-    Array.from({ length: 7 }).map(async (_, idx) => {
-      const day = new Date(todayStart)
-      day.setDate(todayStart.getDate() - (6 - idx))
-      const dayEnd = new Date(day)
-      dayEnd.setDate(day.getDate() + 1)
+  const trendStart = new Date(todayStart)
+  trendStart.setDate(todayStart.getDate() - 6)
 
-      const [dailyLeads, dailyFollowups] = await Promise.all([
-        Activity.countDocuments({
-          actor: userId,
+  const [leadTrendRows, followupTrendRows] = await Promise.all([
+    Activity.aggregate<{ _id: string; count: number }>([
+      {
+        $match: {
+          actor: userObjectId,
           type: { $in: ['lead_created', 'stage_changed'] },
-          createdAt: { $gte: day, $lt: dayEnd },
-        }),
-        FollowUp.countDocuments({ assignedTo: userId, isDone: true, doneAt: { $gte: day, $lt: dayEnd } }),
-      ])
+          createdAt: { $gte: trendStart, $lt: now },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$createdAt',
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    FollowUp.aggregate<{ _id: string; count: number }>([
+      {
+        $match: {
+          assignedTo: userObjectId,
+          isDone: true,
+          doneAt: { $gte: trendStart, $lt: now },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$doneAt',
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ])
 
-      return {
-        date: day.toISOString().slice(0, 10),
-        leadsContacted: dailyLeads,
-        followUpsDone: dailyFollowups,
-      }
-    })
-  )
+  const leadTrendMap = new Map(leadTrendRows.map((row) => [row._id, row.count]))
+  const followupTrendMap = new Map(followupTrendRows.map((row) => [row._id, row.count]))
 
-  const topLeadDoc = await Lead.findOne({ assignedTo: userId, stage: { $in: ['Negotiation', 'Won'] } }).sort({ updatedAt: -1 })
+  const trend = Array.from({ length: 7 }).map((_, idx) => {
+    const day = new Date(todayStart)
+    day.setDate(todayStart.getDate() - (6 - idx))
+    const dayKey = day.toISOString().slice(0, 10)
+
+    return {
+      date: dayKey,
+      leadsContacted: leadTrendMap.get(dayKey) ?? 0,
+      followUpsDone: followupTrendMap.get(dayKey) ?? 0,
+    }
+  })
+
+  const topLeadDoc = await Lead.findOne({ assignedTo: userId, stage: { $in: ['Negotiation', 'Won'] } })
+    .select('businessName stage')
+    .sort({ updatedAt: -1 })
+    .lean()
 
   return {
     user: {

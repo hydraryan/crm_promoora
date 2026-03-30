@@ -116,6 +116,9 @@ leadSchema.index({ stage: 1, assignedTo: 1 })
 leadSchema.index({ createdAt: -1 })
 leadSchema.index({ searchPrefixes: 1, assignedTo: 1 })
 leadSchema.index({ searchPrefixes: 1, createdBy: 1 })
+leadSchema.index({ assignedTo: 1, stage: 1, updatedAt: -1 })
+leadSchema.index({ createdAt: -1, stage: 1 })
+leadSchema.index({ updatedAt: -1, stage: 1 })
 
 leadSchema.pre('save', function () {
   const artifacts = buildSearchArtifacts([this.businessName, this.ownerName, this.phone, this.email, this.notes])

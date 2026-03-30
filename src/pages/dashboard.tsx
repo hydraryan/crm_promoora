@@ -1,6 +1,8 @@
 import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { usePermissions } from '@/context/PermissionContext'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
@@ -122,6 +124,17 @@ interface DashboardData {
   team: BdPerformanceResponse | null
 }
 
+const EMPTY_FOLLOWUPS: FollowUpsResponse = {
+  followups: [],
+  total: 0,
+  overdueCount: 0,
+}
+
+const EMPTY_ACTIVITY: TodayActivityResponse = {
+  activities: [],
+  totalToday: 0,
+}
+
 const quickActions = [
   { id: 'lead', label: 'Add lead', module: 'leads' },
   { id: 'follow-up', label: 'Log follow-up', module: 'followups' },
@@ -183,6 +196,14 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
   const canView = (module: string) => Boolean(permissions?.[module]?.view)
   const canCreate = (module: string) => Boolean(permissions?.[module]?.create)
 
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
+
   const showActivity = canView('team') && (canCreate('leads') || canCreate('followups') || canCreate('proposals'))
   const showProposals = canView('proposals') && canCreate('proposals')
   const showFollowUps = canView('followups') && canCreate('followups')
@@ -196,15 +217,12 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
     setError(null)
 
     try {
-      const [leads, clients, proposals, followupsToday, followupsUpcoming, activity, pipeline, team] = await Promise.all([
+      const [leads, clients, proposals, followupsToday, pipeline] = await Promise.all([
         apiFetch<LeadsResponse>('/leads?stage=all'),
         apiFetch<ClientsResponse>('/clients'),
         apiFetch<ProposalsResponse>('/proposals'),
         apiFetch<FollowUpsResponse>('/followups/today'),
-        apiFetch<FollowUpsResponse>('/followups?view=upcoming'),
-        apiFetch<TodayActivityResponse>('/activity/today'),
         apiFetch<PipelineSummaryResponse>('/leads/pipeline-summary'),
-        showTeam ? apiFetch<BdPerformanceResponse>('/reports/bd-performance') : Promise.resolve(null),
       ])
 
       setData({
@@ -212,11 +230,33 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
         clients,
         proposals,
         followupsToday,
-        followupsUpcoming,
-        activity,
+        followupsUpcoming: EMPTY_FOLLOWUPS,
+        activity: EMPTY_ACTIVITY,
         pipeline,
-        team,
+        team: null,
       })
+
+      setLoading(false)
+
+      void Promise.all([
+        apiFetch<FollowUpsResponse>('/followups?view=upcoming'),
+        apiFetch<TodayActivityResponse>('/activity/today'),
+        showTeam ? apiFetch<BdPerformanceResponse>('/reports/bd-performance') : Promise.resolve(null),
+      ])
+        .then(([followupsUpcoming, activity, team]) => {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              followupsUpcoming,
+              activity,
+              team,
+            }
+          })
+        })
+        .catch(() => {
+          // Keep already rendered critical data visible even if deferred calls fail.
+        })
     } catch {
       setError('Failed to load dashboard overview data')
     } finally {
@@ -274,52 +314,66 @@ export default function DashboardPage({ userName, onQuickAction }: DashboardPage
 
   if (loading)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-4">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="bg-[#111111] rounded-2xl h-24 animate-pulse" />
-        ))}
-      </div>
-    )
+      <div className="min-h-full space-y-6 bg-[#0a0a0a] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+        <div className="flex items-end justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-7 w-36" />
+          </div>
+          <div className="hidden gap-2 xl:flex">
+            <Skeleton className="h-9 w-26" />
+            <Skeleton className="h-9 w-30" />
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
 
-  if (error)
-    return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={`stat-${i}`} className="h-40" />
+          ))}
+        </div>
+
+        <Skeleton className="h-76" />
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+          <div className="space-y-6 xl:col-span-3">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-60" />
+          </div>
+          <div className="space-y-6 xl:col-span-2">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-56" />
           </div>
         </div>
       </div>
     )
 
+  if (error)
+    return (
+      <StatePanel
+        tone="error"
+        title="Unable to load dashboard"
+        message={error}
+        actionLabel="Try again"
+        onAction={() => {
+          void fetchData()
+        }}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
+    )
+
   if (!data)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">No dashboard data available yet.</p>
-          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-            Reload
-          </button>
-        </div>
-      </div>
+      <StatePanel
+        title="No dashboard data"
+        message="There is nothing to show yet. Once data is added, this overview will populate automatically."
+        actionLabel="Reload"
+        onAction={() => {
+          void fetchData()
+        }}
+      />
     )
 
   const pipelineStages = data.pipeline.stages.filter((stage) => stage.name !== 'Lost')

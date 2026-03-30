@@ -120,17 +120,20 @@ export default function AllLeads({
     refetch()
   }, [])
 
-  const filteredLeads = leads.filter((lead) => {
-    const uiStage = (API_STAGE_TO_STAGE[lead.stage] ?? 'Cold') as PipelineStage
-    const matchSearch =
-      !search ||
-      lead.businessName.toLowerCase().includes(search.toLowerCase()) ||
-      lead.ownerName.toLowerCase().includes(search.toLowerCase())
-    const matchStage = !stageFilter || uiStage === stageFilter
-    const matchAssigned = !assignedFilter || lead.assignedTo._id === assignedFilter
-    const matchType = !typeFilter || lead.businessType === typeFilter
-    return matchSearch && matchStage && matchAssigned && matchType
-  })
+  const filteredLeads = useMemo(() => {
+    const normalizedSearch = search.toLowerCase()
+    return leads.filter((lead) => {
+      const uiStage = (API_STAGE_TO_STAGE[lead.stage] ?? 'Cold') as PipelineStage
+      const matchSearch =
+        !normalizedSearch ||
+        lead.businessName.toLowerCase().includes(normalizedSearch) ||
+        lead.ownerName.toLowerCase().includes(normalizedSearch)
+      const matchStage = !stageFilter || uiStage === stageFilter
+      const matchAssigned = !assignedFilter || lead.assignedTo._id === assignedFilter
+      const matchType = !typeFilter || lead.businessType === typeFilter
+      return matchSearch && matchStage && matchAssigned && matchType
+    })
+  }, [assignedFilter, leads, search, stageFilter, typeFilter])
 
   const title = titleOverride ?? defaultStage ?? 'All leads'
 
@@ -258,7 +261,7 @@ export default function AllLeads({
         )}
       </div>
 
-      <div className="mb-1 grid grid-cols-[1fr_160px_150px_140px_100px_32px] gap-4 px-3 py-2">
+      <div className="mb-1 hidden grid-cols-[1fr_160px_150px_140px_100px_32px] gap-4 px-3 py-2 lg:grid">
         {['Business', 'Owner', 'Stage', 'Assigned', 'Last activity', ''].map((col) => (
           <p key={col} className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">
             {col}
@@ -270,34 +273,67 @@ export default function AllLeads({
         const uiStage = (API_STAGE_TO_STAGE[lead.stage] ?? 'Cold') as PipelineStage
         const Icon = stageIcons[uiStage]
         return (
-          <div
-            key={lead._id}
-            onClick={() => setSelectedLeadId(lead._id)}
-            className="group grid cursor-pointer grid-cols-[1fr_160px_150px_140px_100px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{lead.businessName}</p>
-            </div>
-
-            <p className="truncate text-[13px] text-[#52525b]">{lead.ownerName}</p>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#52525b]">
-                <Icon size={13} />
-              </span>
-              <span className="text-[12px] text-[#71717a]">{uiStage}</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
-                <span className="text-[9px] text-[#71717a]">{lead.assignedTo.initials}</span>
+          <div key={lead._id}>
+            <div
+              onClick={() => setSelectedLeadId(lead._id)}
+              className="group hidden cursor-pointer grid-cols-[1fr_160px_150px_140px_100px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0 lg:grid"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{lead.businessName}</p>
               </div>
-              <p className="truncate text-[12px] text-[#52525b]">{lead.assignedTo.name}</p>
+
+              <p className="truncate text-[13px] text-[#71717a]">{lead.ownerName}</p>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#71717a]">
+                  <Icon size={13} />
+                </span>
+                <span className="text-[12px] text-[#a1a1aa]">{uiStage}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
+                  <span className="text-[9px] text-[#a1a1aa]">{lead.assignedTo.initials}</span>
+                </div>
+                <p className="truncate text-[12px] text-[#71717a]">{lead.assignedTo.name}</p>
+              </div>
+
+              <p className="font-['Geist_Mono'] text-[11px] text-[#71717a]">{formatRelativeTime(lead.lastActivityAt)}</p>
+
+              <ChevronRight size={13} className="text-[#52525b] transition-colors duration-100 group-hover:text-[#a1a1aa]" />
             </div>
 
-            <p className="font-['Geist_Mono'] text-[11px] text-[#3f3f46]">{formatRelativeTime(lead.lastActivityAt)}</p>
+            <button
+              type="button"
+              onClick={() => setSelectedLeadId(lead._id)}
+              className="mb-2 w-full rounded-xl border border-[#1f1f1f] bg-[#111111] p-4 text-left transition-colors hover:bg-[#1a1a1a] lg:hidden"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-medium text-[#fafafa]">{lead.businessName}</p>
+                  <p className="mt-1 truncate text-[12px] text-[#a1a1aa]">{lead.ownerName}</p>
+                </div>
+                <ChevronRight size={14} className="shrink-0 text-[#71717a]" />
+              </div>
 
-            <ChevronRight size={13} className="text-[#3f3f46] transition-colors duration-100 group-hover:text-[#52525b]" />
+              <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+                <div>
+                  <p className="text-[#52525b]">Stage</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[#a1a1aa]">
+                    <Icon size={12} />
+                    <span>{uiStage}</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[#52525b]">Assigned</p>
+                  <p className="mt-0.5 truncate text-[#a1a1aa]">{lead.assignedTo.name}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-[#52525b]">Last activity</p>
+                  <p className="mt-0.5 font-['Geist_Mono'] text-[#71717a]">{formatRelativeTime(lead.lastActivityAt)}</p>
+                </div>
+              </div>
+            </button>
           </div>
         )
       })}

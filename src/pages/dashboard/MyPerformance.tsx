@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 
 interface PerformanceData {
@@ -39,6 +41,14 @@ export default function MyPerformance() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -70,67 +80,51 @@ export default function MyPerformance() {
 
   if (role !== 'admin' && role !== 'bd_intern') {
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <p className="text-[#52525b] text-sm">Performance tracking is available for BD team members.</p>
-      </div>
+      <StatePanel
+        title="Access limited"
+        message="Performance tracking is available for BD team members."
+      />
     )
   }
 
   if (loading)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-4">
+      <div className="min-h-full space-y-4 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
+        <Skeleton className="h-12 w-64" />
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-[#111111] rounded-2xl h-24 animate-pulse" />
+          <Skeleton key={i} className="h-24" />
         ))}
       </div>
     )
 
   if (error)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <StatePanel
+        tone="error"
+        title="Unable to load performance"
+        message={error}
+        actionLabel="Try again"
+        onAction={() => void fetchData()}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
     )
 
   if (!data)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">No performance data available yet.</p>
-          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-            Reload
-          </button>
-        </div>
-      </div>
+      <StatePanel
+        title="No performance data"
+        message="No performance data is available yet."
+        actionLabel="Reload"
+        onAction={() => void fetchData()}
+      />
     )
 
   const maxTrend = Math.max(...data.trend.map((d) => d.leadsContacted), 1)
 
   return (
-    <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="min-h-full space-y-6 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#404040] mb-1">This month</p>
           <h1 className="text-[22px] font-semibold text-[#fafafa]">My performance</h1>
@@ -152,7 +146,7 @@ export default function MyPerformance() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
           { label: 'Leads contacted', value: data.currentMonth.leadsContacted, color: 'text-[#fafafa]' },
           { label: 'Proposals sent', value: data.currentMonth.proposalsSent, color: 'text-[#fafafa]' },

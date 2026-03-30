@@ -47,6 +47,70 @@ function toInitials(name: string) {
     .slice(0, 2)
 }
 
+function normalizeRoleKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function canonicalRoleToken(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+async function findRoleByInput(rawRole: string) {
+  const trimmed = rawRole.trim()
+  if (!trimmed) return null
+
+  if (Types.ObjectId.isValid(trimmed)) {
+    const byId = await Role.findById(trimmed).select('_id name label')
+    if (byId) return byId
+  }
+
+  const normalized = normalizeRoleKey(trimmed)
+  const lowered = trimmed.toLowerCase()
+  const candidates = [...new Set([trimmed, lowered, normalized])]
+
+  let roleDoc = await Role.findOne({ name: { $in: candidates } }).select('_id name label')
+  if (roleDoc) return roleDoc
+
+  roleDoc = await Role.findOne({ label: { $regex: `^${escapeRegex(trimmed)}$`, $options: 'i' } }).select('_id name label')
+  if (roleDoc) return roleDoc
+
+  // Fallback for legacy data where role names may use old separators/casing.
+  const allRoles = await Role.find({}).select('_id name label')
+  const inputCanonical = canonicalRoleToken(trimmed)
+  roleDoc =
+    allRoles.find((candidate) => {
+      const nameCanonical = canonicalRoleToken(candidate.name ?? '')
+      const labelCanonical = canonicalRoleToken(candidate.label ?? '')
+      return inputCanonical.length > 0 && (inputCanonical === nameCanonical || inputCanonical === labelCanonical)
+    }) ?? null
+
+  return roleDoc
+}
+
+async function resolveRoleFromRequest(roleInput?: string, roleIdInput?: string) {
+  if (roleIdInput && Types.ObjectId.isValid(roleIdInput)) {
+    const byId = await Role.findById(roleIdInput).select('_id name label')
+    if (byId) return byId
+  }
+
+  if (roleInput && roleInput.trim()) {
+    return findRoleByInput(roleInput)
+  }
+
+  return null
+}
+
 function serializeMember(user: any) {
   const role = toRoleName(user.roleId)
   return {
@@ -75,7 +139,7 @@ function getRouteId(paramValue: string | string[] | undefined): string {
 }
 
 function monthBounds(month: string) {
-  const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7)
+  const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : currentMonthIST()
   const [yearText, monthText] = safeMonth.split('-')
   const year = Number(yearText)
   const monthIndex = Number(monthText)
@@ -86,6 +150,18 @@ function monthBounds(month: string) {
   const end = new Date(`${String(nextMonthYear).padStart(4, '0')}-${String(nextMonthIndex).padStart(2, '0')}-01T00:00:00+05:30`)
 
   return { month: safeMonth, start, end }
+}
+
+function currentMonthIST() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+
+  const year = parts.find((part) => part.type === 'year')?.value ?? '1970'
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01'
+  return `${year}-${month}`
 }
 
 function formatDayKeyIST(value: Date) {
@@ -349,6 +425,7 @@ router.post('/members', async (req: AuthRequest, res: Response) => {
       email?: string
       phone?: string
       role?: string
+      roleId?: string
       password?: string
     }
 
@@ -363,8 +440,8 @@ router.post('/members', async (req: AuthRequest, res: Response) => {
     const normalizedEmail = email.trim().toLowerCase()
     const existing = await User.findOne({ email: normalizedEmail })
 
-    const roleDoc = await Role.findOne({ name: role }).select('_id name')
-    if (!roleDoc || roleDoc.name === 'admin') return res.status(400).json({ error: 'Invalid role for member creation' })
+    const roleDoc = await resolveRoleFromRequest(role, req.body?.roleId as string | undefined)
+    if (!roleDoc || normalizeRoleKey(roleDoc.name) === 'admin') return res.status(400).json({ error: 'Invalid role for member creation' })
 
     const passwordHash = await hashPassword(password)
 
@@ -442,43 +519,50 @@ router.post('/invite', async (req: AuthRequest, res: Response) => {
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
     if (!isAdmin(auth.roleName)) return res.status(403).json({ error: 'Only admins can invite members' })
 
-    const { email, role } = req.body as { email?: string; role?: string }
+    const { name, email, role, roleId } = req.body as { name?: string; email?: string; role?: string; roleId?: string }
 
-    if (!email?.trim() || !role) {
-      return res.status(400).json({ error: 'email and role are required' })
+    if (!name?.trim() || !email?.trim() || !role) {
+      return res.status(400).json({ error: 'name, email and role are required' })
     }
 
     const existing = await User.findOne({ email: email.trim().toLowerCase() })
     if (existing) return res.status(409).json({ error: 'Email already exists' })
 
-    const roleDoc = await Role.findOne({ name: role }).select('_id name')
-    if (!roleDoc || roleDoc.name === 'admin') return res.status(400).json({ error: 'Invalid role for invitation' })
+    const roleDoc = await resolveRoleFromRequest(role, roleId)
+    if (!roleDoc || normalizeRoleKey(roleDoc.name) === 'admin') return res.status(400).json({ error: 'Invalid role for invitation' })
 
     const temporaryPassword = Math.random().toString(36).slice(2, 12)
     const passwordHash = await hashPassword(temporaryPassword)
 
-    await User.create({
-      name: email.split('@')[0],
+    const created = await User.create({
+      name: name.trim(),
       email: email.trim().toLowerCase(),
       passwordHash,
       roleId: roleDoc._id,
-      status: 'inactive',
-      isEmailVerified: false,
+      status: 'active',
+      isEmailVerified: true,
       createdBy: auth.userId,
     })
+
+    const mailResult = await sendWelcomeMemberEmail(created.email, created.name, temporaryPassword)
+    if (!mailResult.sent) {
+      await User.deleteOne({ _id: created._id })
+      return res.status(500).json({ error: `Failed to send invite email: ${mailResult.reason ?? 'Unknown error'}` })
+    }
 
     await createNotification({
       userId: auth.userId,
       category: 'team',
-      title: 'Invitation Sent',
-      message: `${email.trim().toLowerCase()} invited as ${role}`,
+      title: 'Invite Sent',
+      message: `Login credentials sent to ${email.trim().toLowerCase()} as ${roleDoc.name}`,
       actionUrl: '/team/list',
     })
 
     return res.status(201).json({
       success: true,
+      name: name.trim(),
       email: email.trim().toLowerCase(),
-      expiresInHours: 48,
+      temporaryPassword,
     })
   } catch (error) {
     console.error('Invite member error:', error)
@@ -500,6 +584,7 @@ router.patch('/members/:id', async (req: AuthRequest, res: Response) => {
       email?: string
       phone?: string
       role?: string
+      roleId?: string
       status?: 'active' | 'inactive'
     }
 
@@ -516,8 +601,9 @@ router.patch('/members/:id', async (req: AuthRequest, res: Response) => {
     if (typeof phone === 'string' && phone.trim()) user.phone = phone.trim()
     if (status === 'active' || status === 'inactive') user.status = status
 
-    if (role && role.trim()) {
-      const roleDoc = await Role.findOne({ name: role }).select('_id')
+    const requestedRoleId = req.body?.roleId as string | undefined
+    if ((role && role.trim()) || (requestedRoleId && Types.ObjectId.isValid(requestedRoleId))) {
+      const roleDoc = await resolveRoleFromRequest(role, requestedRoleId)
       if (roleDoc) user.roleId = roleDoc._id
     }
 
@@ -696,7 +782,7 @@ router.get('/members/:id/attendance', async (req: AuthRequest, res: Response) =>
     if (!Types.ObjectId.isValid(memberId)) return res.status(400).json({ error: 'Invalid member id' })
     if (!canViewMember(auth.roleName, auth.userId, memberId)) return res.status(403).json({ error: 'Not allowed to view this member attendance' })
 
-    const { month = new Date().toISOString().slice(0, 7) } = req.query as { month?: string }
+    const { month = currentMonthIST() } = req.query as { month?: string }
     const bounds = monthBounds(month)
 
     const sessions = await UserSession.find({
@@ -730,10 +816,13 @@ router.get('/attendance', async (req: AuthRequest, res: Response) => {
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
     if (!isAdmin(auth.roleName)) return res.status(403).json({ error: 'Only admins can view team attendance' })
 
-    const { month = new Date().toISOString().slice(0, 7) } = req.query as { month?: string }
+    const { month = currentMonthIST(), includeInactive = 'false' } = req.query as { month?: string; includeInactive?: string }
     const bounds = monthBounds(month)
+    const shouldIncludeInactive = String(includeInactive).toLowerCase() === 'true'
 
-    const users = await User.find({ status: 'active' }).populate('roleId', 'name').select('_id name avatarInitials roleId')
+    const users = await User.find({ status: shouldIncludeInactive ? { $in: ['active', 'inactive'] } : 'active' })
+      .populate('roleId', 'name')
+      .select('_id name avatarInitials roleId status')
 
     const sessions = await UserSession.find({
       userId: { $in: users.map((user) => user._id) },
@@ -764,6 +853,7 @@ router.get('/attendance', async (req: AuthRequest, res: Response) => {
           name: user.name,
           initials: user.avatarInitials || toInitials(user.name || 'NA'),
           role: toRoleName(user.roleId),
+          status: user.status === 'active' ? 'active' : 'inactive',
         },
         summary: {
           presentDays: attendance.presentDays,
@@ -780,7 +870,7 @@ router.get('/attendance', async (req: AuthRequest, res: Response) => {
       }
     })
 
-    return res.json({ month: bounds.month, members })
+    return res.json({ month: bounds.month, includeInactive: shouldIncludeInactive, members })
   } catch (error) {
     console.error('Team attendance error:', error)
     return res.status(500).json({ error: 'Failed to fetch team attendance' })

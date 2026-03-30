@@ -23,13 +23,28 @@ type DirectForm = {
 }
 
 type InviteForm = {
+  name: string
   email: string
   role: string
 }
 
 type RoleOption = {
+  id: string
   key: string
   label: string
+  candidates: string[]
+}
+
+function normalizeRoleCandidate(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function candidateList(values: Array<string | undefined>) {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))]
 }
 
 export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inline = false }: AddMemberModalProps) {
@@ -49,6 +64,7 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
   })
 
   const [inviteForm, setInviteForm] = useState<InviteForm>({
+    name: '',
     email: '',
     role: '',
   })
@@ -58,16 +74,24 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
       const response = await apiFetch<{ roles: CRMRole[] }>('/roles')
       const options = (response.roles ?? [])
         .map((role) => ({
-          key: role.key ?? role.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+          id: role._id,
+          key: role.key ?? role.name,
           label: role.name,
+          candidates: candidateList([role._id, role.key, role.name, normalizeRoleCandidate(role.name)]),
         }))
-        .filter((role) => role.key !== 'admin')
+        .filter((role) => normalizeRoleCandidate(role.key) !== 'admin')
 
       setRoleOptions(options)
 
       const defaultRole = options[0]?.key ?? ''
-      setDirectForm((prev) => ({ ...prev, role: prev.role || defaultRole }))
-      setInviteForm((prev) => ({ ...prev, role: prev.role || defaultRole }))
+      setDirectForm((prev) => ({
+        ...prev,
+        role: options.some((option) => option.key === prev.role) ? prev.role : defaultRole,
+      }))
+      setInviteForm((prev) => ({
+        ...prev,
+        role: options.some((option) => option.key === prev.role) ? prev.role : defaultRole,
+      }))
     } catch {
       setError('Unable to load roles. Please refresh and try again.')
     }
@@ -77,15 +101,35 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
     loadRoleOptions()
   }, [])
 
-  const modeTitle = useMemo(() => (addMode === 'direct' ? 'Create a member account directly' : 'Send an invite link to join later'), [addMode])
+  const modeTitle = useMemo(() => (addMode === 'direct' ? 'Create a member account directly' : 'Send login credentials via email'), [addMode])
 
   if (!inline && !isOpen) return null
+
+  const resolveRoleCandidates = (selectedRole: string) => {
+    const selected = roleOptions.find((option) => option.key === selectedRole)
+    return candidateList([
+      selectedRole,
+      selected?.id,
+      selected?.key,
+      selected?.label,
+      ...(selected?.candidates ?? []),
+      normalizeRoleCandidate(selectedRole),
+    ])
+  }
+
+  const getSelectedRole = (selectedRole: string) => roleOptions.find((option) => option.key === selectedRole)
 
   async function handleDirectSubmit() {
     setError(null)
 
     if (!directForm.role) {
       setError('Please select a role.')
+      return
+    }
+
+    const selectedRole = getSelectedRole(directForm.role)
+    if (!selectedRole) {
+      setError('Selected role is unavailable. Please re-select role and try again.')
       return
     }
 
@@ -106,16 +150,37 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
 
     setSubmitting(true)
     try {
-      await apiFetch<{ member: TeamMember }>('/team/members', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: directForm.name.trim(),
-          email: directForm.email.trim(),
-          phone: directForm.phone.trim(),
-          role: directForm.role,
-          password: directForm.password,
-        }),
-      })
+      const roleCandidates = resolveRoleCandidates(directForm.role)
+      let created = false
+
+      for (const roleValue of roleCandidates) {
+        try {
+          await apiFetch<{ member: TeamMember }>('/team/members', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: directForm.name.trim(),
+              email: directForm.email.trim(),
+              phone: directForm.phone.trim(),
+              role: roleValue,
+              roleId: selectedRole.id,
+              password: directForm.password,
+            }),
+          })
+          created = true
+          break
+        } catch (innerErr) {
+          const message = innerErr instanceof Error ? innerErr.message : ''
+          const isRoleMismatch = message.includes('Invalid role for member creation')
+          if (!isRoleMismatch || roleValue === roleCandidates[roleCandidates.length - 1]) {
+            throw innerErr
+          }
+        }
+      }
+
+      if (!created) {
+        throw new Error('Failed to resolve selected role for member creation')
+      }
+
       onSuccess()
       if (!inline) onClose?.()
       setDirectForm((prev) => ({ name: '', email: '', phone: '', role: prev.role, password: '', confirmPassword: '' }))
@@ -134,20 +199,48 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
       return
     }
 
-    if (!inviteForm.email.trim()) {
-      setError('Email is required.')
+    const selectedRole = getSelectedRole(inviteForm.role)
+    if (!selectedRole) {
+      setError('Selected role is unavailable. Please re-select role and try again.')
+      return
+    }
+
+    if (!inviteForm.name.trim() || !inviteForm.email.trim()) {
+      setError('Name and email are required.')
       return
     }
 
     setSubmitting(true)
     try {
-      await apiFetch<{ success: boolean; email: string }>('/team/invite', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: inviteForm.email.trim(),
-          role: inviteForm.role,
-        }),
-      })
+      const roleCandidates = resolveRoleCandidates(inviteForm.role)
+      let invited = false
+
+      for (const roleValue of roleCandidates) {
+        try {
+          await apiFetch<{ success: boolean; email: string; name: string }>('/team/invite', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: inviteForm.name.trim(),
+              email: inviteForm.email.trim(),
+              role: roleValue,
+              roleId: selectedRole.id,
+            }),
+          })
+          invited = true
+          break
+        } catch (innerErr) {
+          const message = innerErr instanceof Error ? innerErr.message : ''
+          const isRoleMismatch = message.includes('Invalid role for invitation')
+          if (!isRoleMismatch || roleValue === roleCandidates[roleCandidates.length - 1]) {
+            throw innerErr
+          }
+        }
+      }
+
+      if (!invited) {
+        throw new Error('Failed to resolve selected role for invitation')
+      }
+
       setInviteSentTo(inviteForm.email.trim())
       onSuccess()
     } catch (err) {
@@ -272,6 +365,16 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
         ) : (
           <div className="space-y-4">
             <div>
+              <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-[#52525b]">Name</label>
+              <input
+                value={inviteForm.name}
+                onChange={(e) => setInviteForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full rounded-xl border border-[#1f1f1f] bg-[#111111] px-3 py-2 text-[13px] text-[#e4e4e7] outline-none focus:ring-1 focus:ring-[#6366f1]"
+                placeholder="Member full name"
+              />
+            </div>
+
+            <div>
               <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-[#52525b]">Email</label>
               <input
                 type="email"
@@ -310,7 +413,7 @@ export default function AddMemberModal({ isOpen = false, onClose, onSuccess, inl
                 <CheckCircle2 size={14} className="shrink-0 text-[#22c55e]" />
                 <div>
                   <p className="text-[13px] font-medium text-[#fafafa]">Invite sent</p>
-                  <p className="mt-0.5 text-[11px] text-[#71717a]">A signup link has been emailed to {inviteSentTo}. It expires in 48 hours.</p>
+                  <p className="mt-0.5 text-[11px] text-[#71717a]">Login credentials have been emailed to {inviteSentTo}.</p>
                 </div>
               </div>
             )}

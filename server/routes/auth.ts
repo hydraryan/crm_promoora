@@ -73,6 +73,7 @@ router.post('/login', async (req: Request, res: Response) => {
     await UserSession.updateMany(
       {
         userId: user._id,
+        expiresAt: { $gt: new Date() },
         $or: [{ logoutAt: { $exists: false } }, { logoutAt: null }],
       },
       {
@@ -175,6 +176,7 @@ router.post('/logout', authenticateToken, async (req: AuthRequest, res: Response
     await UserSession.updateMany(
       {
         userId: req.user.userId,
+        expiresAt: { $gt: new Date() },
         $or: [{ logoutAt: { $exists: false } }, { logoutAt: null }],
       },
       {

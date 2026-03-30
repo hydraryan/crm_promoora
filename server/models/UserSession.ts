@@ -74,5 +74,6 @@ const userSessionSchema = new Schema<IUserSession>(
 // Compound index for efficient lookups
 userSessionSchema.index({ userId: 1, deviceId: 1 })
 userSessionSchema.index({ userId: 1, loginAt: 1 })
+userSessionSchema.index({ userId: 1, logoutAt: 1, expiresAt: 1 })
 
 export const UserSession = model<IUserSession>('UserSession', userSessionSchema)

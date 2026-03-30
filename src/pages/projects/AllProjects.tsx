@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronRight, Plus, Search } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 import { usePermissions } from '@/context/PermissionContext'
 import {
@@ -38,6 +40,14 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
   const [teamMembers, setTeamMembers] = useState<Array<{ _id: string; name: string; initials: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [showNewProjectModal, setShowNewProjectModal] = useState(Boolean(openNewProjectModal))
+
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
 
   useEffect(() => {
     setShowNewProjectModal(Boolean(openNewProjectModal))
@@ -82,58 +92,52 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
     refetch()
   }, [])
 
-  const filteredProjects = projects.filter((project) => {
-    const matchSearch =
-      !search || project.title.toLowerCase().includes(search.toLowerCase()) || project.client.businessName.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = !statusFilter || project.status === statusFilter
-    const matchType = !typeFilter || project.serviceType === typeFilter
-    const matchPriority = !priorityFilter || project.priority === priorityFilter
-    const matchAssigned = !assignedFilter || project.assignedTo.some((assignee) => assignee._id === assignedFilter)
-    return matchSearch && matchStatus && matchType && matchPriority && matchAssigned
-  })
+  const filteredProjects = useMemo(() => {
+    const normalizedSearch = search.toLowerCase()
+    return projects.filter((project) => {
+      const matchSearch =
+        !normalizedSearch ||
+        project.title.toLowerCase().includes(normalizedSearch) ||
+        project.client.businessName.toLowerCase().includes(normalizedSearch)
+      const matchStatus = !statusFilter || project.status === statusFilter
+      const matchType = !typeFilter || project.serviceType === typeFilter
+      const matchPriority = !priorityFilter || project.priority === priorityFilter
+      const matchAssigned = !assignedFilter || project.assignedTo.some((assignee) => assignee._id === assignedFilter)
+      return matchSearch && matchStatus && matchType && matchPriority && matchAssigned
+    })
+  }, [assignedFilter, priorityFilter, projects, search, statusFilter, typeFilter])
 
-  const dueSoonProjects = projects.filter((project) => {
-    if (project.status !== 'In progress' || !project.dueDate) return false
-    const dueTime = new Date(project.dueDate).getTime()
-    return dueTime - Date.now() < 3 * 24 * 60 * 60 * 1000 && dueTime > Date.now()
-  })
+  const dueSoonProjects = useMemo(() => {
+    const now = Date.now()
+    return projects.filter((project) => {
+      if (project.status !== 'In progress' || !project.dueDate) return false
+      const dueTime = new Date(project.dueDate).getTime()
+      return dueTime - now < 3 * 24 * 60 * 60 * 1000 && dueTime > now
+    })
+  }, [projects])
 
   if (loading)
     return (
       <div className="min-h-full space-y-4 bg-[#0a0a0a] px-8 py-7">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-16 animate-pulse rounded-2xl bg-[#111111]" />
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-11 w-full" />
+        {[...Array(6)].map((_, i) => (
+          <Skeleton key={i} className="h-20" />
         ))}
       </div>
     )
 
   if (error)
     return (
-      <div className="flex min-h-full items-center justify-center bg-[#0a0a0a] px-8 py-7">
-        <div className="space-y-2 text-center">
-          <p className="text-sm text-[#52525b]">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={refetch} className="text-sm text-[#6366f1] hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <StatePanel
+        tone="error"
+        title="Unable to load projects"
+        message={error}
+        actionLabel="Try again"
+        onAction={refetch}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
     )
 
   return (
@@ -267,7 +271,7 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
         )}
       </div>
 
-      <div className="mb-1 grid grid-cols-[1fr_180px_150px_130px_120px_90px_32px] gap-4 px-3 py-2">
+      <div className="mb-1 hidden grid-cols-[1fr_180px_150px_130px_120px_90px_32px] gap-4 px-3 py-2 lg:grid">
         {['Project', 'Client', 'Type', 'Status', 'Progress', 'Due', ''].map((col) => (
           <p key={col} className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">
             {col}
@@ -276,49 +280,85 @@ export default function AllProjects({ defaultStatus, defaultServiceType, titleOv
       </div>
 
       {filteredProjects.map((project) => (
-        <div
-          key={project._id}
-          onClick={() => setSelectedProjectId(project._id)}
-          className="group grid cursor-pointer grid-cols-[1fr_180px_150px_130px_120px_90px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: priorityColors[project.priority] }} />
-            <div className="min-w-0">
-              <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{project.title}</p>
-            </div>
-          </div>
-
-          <p className="self-center truncate text-[12px] text-[#52525b]">{project.client.businessName}</p>
-
-          <div className="self-center flex items-center gap-1.5">
-            <span className="text-[#52525b]">{serviceTypeIcons[project.serviceType]}</span>
-            <span className="text-[12px] text-[#71717a]">{project.serviceType}</span>
-          </div>
-
-          <div className="self-center flex items-center gap-1.5">
-            <span style={{ color: statusMeta[project.status].color }}>{statusMeta[project.status].icon}</span>
-            <span className="text-[12px] text-[#71717a]">{project.status}</span>
-          </div>
-
-          <div className="self-center flex items-center gap-2">
-            <div className="h-0.75 flex-1 overflow-hidden rounded-full bg-[#1a1a1a]">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${project.progress}%`, backgroundColor: project.progress === 100 ? '#22c55e' : '#6366f1' }}
-              />
-            </div>
-            <span className="w-7 shrink-0 text-right font-['Geist_Mono'] text-[11px] text-[#52525b]">{project.progress}%</span>
-          </div>
-
-          <p
-            className={`self-center font-['Geist_Mono'] text-[11px] ${
-              project.dueDate && new Date(project.dueDate) < new Date() && project.status !== 'Completed' ? 'text-[#ef4444]' : 'text-[#3f3f46]'
-            }`}
+        <div key={project._id}>
+          <div
+            onClick={() => setSelectedProjectId(project._id)}
+            className="group hidden cursor-pointer grid-cols-[1fr_180px_150px_130px_120px_90px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0 lg:grid"
           >
-            {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
-          </p>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: priorityColors[project.priority] }} />
+              <div className="min-w-0">
+                <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{project.title}</p>
+              </div>
+            </div>
 
-          <ChevronRight size={13} className="self-center text-[#3f3f46] transition-colors duration-100 group-hover:text-[#52525b]" />
+            <p className="self-center truncate text-[12px] text-[#71717a]">{project.client.businessName}</p>
+
+            <div className="self-center flex items-center gap-1.5">
+              <span className="text-[#71717a]">{serviceTypeIcons[project.serviceType]}</span>
+              <span className="text-[12px] text-[#71717a]">{project.serviceType}</span>
+            </div>
+
+            <div className="self-center flex items-center gap-1.5">
+              <span style={{ color: statusMeta[project.status].color }}>{statusMeta[project.status].icon}</span>
+              <span className="text-[12px] text-[#a1a1aa]">{project.status}</span>
+            </div>
+
+            <div className="self-center flex items-center gap-2">
+              <div className="h-0.75 flex-1 overflow-hidden rounded-full bg-[#1a1a1a]">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${project.progress}%`, backgroundColor: project.progress === 100 ? '#22c55e' : '#6366f1' }}
+                />
+              </div>
+              <span className="w-7 shrink-0 text-right font-['Geist_Mono'] text-[11px] text-[#71717a]">{project.progress}%</span>
+            </div>
+
+            <p
+              className={`self-center font-['Geist_Mono'] text-[11px] ${
+                project.dueDate && new Date(project.dueDate) < new Date() && project.status !== 'Completed' ? 'text-[#ef4444]' : 'text-[#71717a]'
+              }`}
+            >
+              {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
+            </p>
+
+            <ChevronRight size={13} className="self-center text-[#52525b] transition-colors duration-100 group-hover:text-[#a1a1aa]" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedProjectId(project._id)}
+            className="mb-2 w-full rounded-xl border border-[#1f1f1f] bg-[#111111] p-4 text-left transition-colors hover:bg-[#1a1a1a] lg:hidden"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-medium text-[#fafafa]">{project.title}</p>
+                <p className="mt-1 truncate text-[12px] text-[#a1a1aa]">{project.client.businessName}</p>
+              </div>
+              <ChevronRight size={14} className="shrink-0 text-[#71717a]" />
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+              <div>
+                <p className="text-[#52525b]">Type</p>
+                <p className="mt-0.5 truncate text-[#a1a1aa]">{project.serviceType}</p>
+              </div>
+              <div>
+                <p className="text-[#52525b]">Status</p>
+                <p className="mt-0.5 truncate text-[#a1a1aa]">{project.status}</p>
+              </div>
+              <div>
+                <p className="text-[#52525b]">Progress</p>
+                <p className="mt-0.5 font-['Geist_Mono'] text-[#71717a]">{project.progress}%</p>
+              </div>
+              <div>
+                <p className="text-[#52525b]">Due</p>
+                <p className="mt-0.5 font-['Geist_Mono'] text-[#71717a]">
+                  {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
+                </p>
+              </div>
+            </div>
+          </button>
         </div>
       ))}
 

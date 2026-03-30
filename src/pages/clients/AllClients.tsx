@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Plus, Search } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 import { usePermissions } from '@/context/PermissionContext'
 import { businessTypeIcons, BUSINESS_TYPES, CLIENT_STATUSES, statusDot, type BusinessType, type Client, type ClientStatus } from '@/utils/clientConstants'
@@ -29,6 +31,14 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [showNewClientModal, setShowNewClientModal] = useState(Boolean(openNewClientModal))
   const [endpointUnavailable, setEndpointUnavailable] = useState(false)
+
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
 
   useEffect(() => {
     setShowNewClientModal(Boolean(openNewClientModal))
@@ -73,60 +83,52 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
     refetch()
   }, [])
 
-  const filteredClients = clients.filter((client) => {
-    const matchSearch =
-      !search ||
-      client.businessName.toLowerCase().includes(search.toLowerCase()) ||
-      client.ownerName.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = !statusFilter || client.status === statusFilter
-    const matchType = !typeFilter || client.businessType === typeFilter
-    const matchAssigned = !assignedFilter || client.assignedTo._id === assignedFilter
-    return matchSearch && matchStatus && matchType && matchAssigned
-  })
+  const filteredClients = useMemo(() => {
+    const normalizedSearch = search.toLowerCase()
+    return clients.filter((client) => {
+      const matchSearch =
+        !normalizedSearch ||
+        client.businessName.toLowerCase().includes(normalizedSearch) ||
+        client.ownerName.toLowerCase().includes(normalizedSearch)
+      const matchStatus = !statusFilter || client.status === statusFilter
+      const matchType = !typeFilter || client.businessType === typeFilter
+      const matchAssigned = !assignedFilter || client.assignedTo._id === assignedFilter
+      return matchSearch && matchStatus && matchType && matchAssigned
+    })
+  }, [assignedFilter, clients, search, statusFilter, typeFilter])
 
   if (loading)
     return (
       <div className="min-h-full space-y-4 bg-[#0a0a0a] px-8 py-7">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-16 animate-pulse rounded-2xl bg-[#111111]" />
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-11 w-full" />
+        {[...Array(6)].map((_, i) => (
+          <Skeleton key={i} className="h-20" />
         ))}
       </div>
     )
 
   if (error)
     return (
-      <div className="flex min-h-full items-center justify-center bg-[#0a0a0a] px-8 py-7">
-        <div className="space-y-2 text-center">
-          <p className="text-sm text-[#52525b]">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={refetch} className="text-sm text-[#6366f1] hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <StatePanel
+        tone="error"
+        title="Unable to load clients"
+        message={error}
+        actionLabel="Try again"
+        onAction={refetch}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
     )
 
   if (endpointUnavailable)
     return (
-      <div className="flex min-h-full items-center justify-center bg-[#0a0a0a] px-8 py-7">
-        <p className="text-sm text-[#52525b]">Endpoint not available yet. Expected: GET /api/clients</p>
-      </div>
+      <StatePanel
+        title="Clients endpoint unavailable"
+        message="Expected backend route: GET /api/clients"
+        actionLabel="Retry"
+        onAction={refetch}
+      />
     )
 
   return (
@@ -214,7 +216,7 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
         )}
       </div>
 
-      <div className="mb-1 grid grid-cols-[1fr_160px_120px_150px_140px_90px_32px] gap-4 px-3 py-2">
+      <div className="mb-1 hidden grid-cols-[1fr_160px_120px_150px_140px_90px_32px] gap-4 px-3 py-2 lg:grid">
         {['Business', 'Owner', 'Status', 'Type', 'Assigned', 'Since', ''].map((col) => (
           <p key={col} className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">
             {col}
@@ -223,39 +225,78 @@ export default function AllClients({ defaultStatus, defaultBusinessType, titleOv
       </div>
 
       {filteredClients.map((client) => (
-        <div
-          key={client._id}
-          onClick={() => setSelectedClientId(client._id)}
-          className="group grid cursor-pointer grid-cols-[1fr_160px_120px_150px_140px_90px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{client.businessName}</p>
-          </div>
-
-          <p className="truncate text-[13px] text-[#52525b]">{client.ownerName}</p>
-
-          <div className="flex items-center gap-1.5">
-            {statusDot(client.status)}
-            <span className="text-[12px] text-[#71717a]">{client.status}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[#52525b]">{businessTypeIcons[client.businessType]}</span>
-            <span className="text-[12px] text-[#71717a]">{client.businessType}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
-              <span className="text-[9px] text-[#71717a]">{client.assignedTo.initials}</span>
+        <div key={client._id}>
+          <div
+            onClick={() => setSelectedClientId(client._id)}
+            className="group hidden cursor-pointer grid-cols-[1fr_160px_120px_150px_140px_90px_32px] gap-4 rounded-xl border-b border-[#1a1a1a] px-3 py-2.5 hover:bg-[#1a1a1a] last:border-b-0 lg:grid"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-[13px] text-[#a1a1aa] transition-colors duration-100 group-hover:text-[#fafafa]">{client.businessName}</p>
             </div>
-            <p className="truncate text-[12px] text-[#52525b]">{client.assignedTo.name}</p>
+
+            <p className="truncate text-[13px] text-[#71717a]">{client.ownerName}</p>
+
+            <div className="flex items-center gap-1.5">
+              {statusDot(client.status)}
+              <span className="text-[12px] text-[#a1a1aa]">{client.status}</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#71717a]">{businessTypeIcons[client.businessType]}</span>
+              <span className="text-[12px] text-[#71717a]">{client.businessType}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a]">
+                <span className="text-[9px] text-[#a1a1aa]">{client.assignedTo.initials}</span>
+              </div>
+              <p className="truncate text-[12px] text-[#71717a]">{client.assignedTo.name}</p>
+            </div>
+
+            <p className="font-['Geist_Mono'] text-[11px] text-[#71717a]">
+              {client.activeFrom ? new Date(client.activeFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
+            </p>
+
+            <ChevronRight size={13} className="text-[#52525b] transition-colors duration-100 group-hover:text-[#a1a1aa]" />
           </div>
 
-          <p className="font-['Geist_Mono'] text-[11px] text-[#3f3f46]">
-            {client.activeFrom ? new Date(client.activeFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
-          </p>
+          <button
+            type="button"
+            onClick={() => setSelectedClientId(client._id)}
+            className="mb-2 w-full rounded-xl border border-[#1f1f1f] bg-[#111111] p-4 text-left transition-colors hover:bg-[#1a1a1a] lg:hidden"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-medium text-[#fafafa]">{client.businessName}</p>
+                <p className="mt-1 truncate text-[12px] text-[#a1a1aa]">{client.ownerName}</p>
+              </div>
+              <ChevronRight size={14} className="shrink-0 text-[#71717a]" />
+            </div>
 
-          <ChevronRight size={13} className="text-[#3f3f46] transition-colors duration-100 group-hover:text-[#52525b]" />
+            <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+              <div>
+                <p className="text-[#52525b]">Status</p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-[#a1a1aa]">
+                  {statusDot(client.status)}
+                  <span>{client.status}</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-[#52525b]">Type</p>
+                <p className="mt-0.5 truncate text-[#a1a1aa]">{client.businessType}</p>
+              </div>
+              <div>
+                <p className="text-[#52525b]">Assigned</p>
+                <p className="mt-0.5 truncate text-[#a1a1aa]">{client.assignedTo.name}</p>
+              </div>
+              <div>
+                <p className="text-[#52525b]">Since</p>
+                <p className="mt-0.5 font-['Geist_Mono'] text-[#71717a]">
+                  {client.activeFrom ? new Date(client.activeFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}
+                </p>
+              </div>
+            </div>
+          </button>
         </div>
       ))}
 

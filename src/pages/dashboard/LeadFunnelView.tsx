@@ -1,5 +1,7 @@
 import { Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
@@ -46,6 +48,14 @@ export default function LeadFunnelView() {
   const [assignedFilter, setAssignedFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
 
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -69,57 +79,45 @@ export default function LeadFunnelView() {
     void fetchData()
   }, [fetchData])
 
-  const filteredLeads = leads.filter((lead) => {
-    const matchSearch =
-      !search ||
-      lead.businessName.toLowerCase().includes(search.toLowerCase()) ||
-      lead.ownerName.toLowerCase().includes(search.toLowerCase())
-    const matchStage = !stageFilter || lead.stage === stageFilter
-    const matchAssigned = !assignedFilter || lead.assignedTo._id === assignedFilter
-    const matchType = !typeFilter || lead.businessType === typeFilter
-    return matchSearch && matchStage && matchAssigned && matchType
-  })
+  const filteredLeads = useMemo(() => {
+    const normalizedSearch = search.toLowerCase()
+    return leads.filter((lead) => {
+      const matchSearch =
+        !normalizedSearch ||
+        lead.businessName.toLowerCase().includes(normalizedSearch) ||
+        lead.ownerName.toLowerCase().includes(normalizedSearch)
+      const matchStage = !stageFilter || lead.stage === stageFilter
+      const matchAssigned = !assignedFilter || lead.assignedTo._id === assignedFilter
+      const matchType = !typeFilter || lead.businessType === typeFilter
+      return matchSearch && matchStage && matchAssigned && matchType
+    })
+  }, [assignedFilter, leads, search, stageFilter, typeFilter])
 
   if (loading)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-4">
+      <div className="min-h-full space-y-4 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
+        <Skeleton className="h-11 w-full" />
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-[#111111] rounded-2xl h-24 animate-pulse" />
+          <Skeleton key={i} className="h-24" />
         ))}
       </div>
     )
 
   if (error)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <StatePanel
+        tone="error"
+        title="Unable to load lead funnel"
+        message={error}
+        actionLabel="Try again"
+        onAction={() => void fetchData()}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
     )
 
   return (
-    <div className="min-h-full bg-[#0a0a0a] px-8 py-7">
+    <div className="min-h-full bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
       <div className="flex items-center gap-3 mb-6 flex-wrap">
         <div className="flex items-center gap-2 bg-[#111111] rounded-xl px-3 py-2 flex-1 max-w-xs">
           <Search size={13} className="text-[#52525b] shrink-0" />
@@ -175,8 +173,8 @@ export default function LeadFunnelView() {
         <p className="text-[11px] text-[#52525b] ml-auto font-['Geist_Mono']">{filteredLeads.length} leads</p>
       </div>
 
-      <div className="bg-[#111111] rounded-2xl overflow-hidden">
-        <div className="grid grid-cols-[1fr_140px_120px_100px_80px] gap-4 px-5 py-3 border-b border-[#1a1a1a]">
+      <div className="overflow-hidden rounded-2xl bg-[#111111]">
+        <div className="hidden grid-cols-[1fr_140px_120px_100px_80px] gap-4 border-b border-[#1a1a1a] px-5 py-3 lg:grid">
           {['Business', 'Owner', 'Stage', 'Assigned', 'Last activity'].map((col) => (
             <p key={col} className="text-[11px] font-medium uppercase tracking-wider text-[#3f3f46]">
               {col}
@@ -186,46 +184,68 @@ export default function LeadFunnelView() {
 
         <div className="divide-y divide-[#161616]">
           {filteredLeads.map((lead) => (
-            <div
-              key={lead._id}
-              className="grid grid-cols-[1fr_140px_120px_100px_80px] gap-4 px-5 py-3 hover:bg-[#161616] transition-colors duration-150 cursor-pointer group"
-            >
-              <div className="min-w-0">
-                <p className="text-[13px] text-[#a1a1aa] group-hover:text-[#fafafa] truncate transition-colors">
-                  {lead.businessName}
+            <div key={lead._id}>
+              <div className="group hidden cursor-pointer grid-cols-[1fr_140px_120px_100px_80px] gap-4 px-5 py-3 transition-colors duration-150 hover:bg-[#161616] lg:grid">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] text-[#a1a1aa] transition-colors group-hover:text-[#fafafa]">
+                    {lead.businessName}
+                  </p>
+                  <p className="truncate text-[11px] text-[#52525b]">{lead.businessType}</p>
+                </div>
+
+                <p className="self-center truncate text-[13px] text-[#71717a]">{lead.ownerName}</p>
+
+                <div className="self-center flex items-center gap-1.5">
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      lead.stage === 'Won'
+                        ? 'bg-[#22c55e]'
+                        : lead.stage === 'Lost'
+                          ? 'bg-[#ef4444]'
+                          : lead.stage === 'Negotiation'
+                            ? 'bg-[#f59e0b]'
+                            : lead.stage === 'Proposal sent'
+                              ? 'bg-[#f59e0b] opacity-60'
+                              : lead.stage === 'Meeting'
+                                ? 'bg-[#6366f1]'
+                                : lead.stage === 'Contacted'
+                                  ? 'bg-[#6366f1] opacity-60'
+                                  : 'bg-[#3f3f46]'
+                    }`}
+                  />
+                  <p className="text-[12px] text-[#71717a]">{lead.stage}</p>
+                </div>
+
+                <p className="self-center text-[12px] text-[#52525b]">{lead.assignedTo.name}</p>
+                <p className="self-center text-[11px] font-['Geist_Mono'] text-[#3f3f46]">
+                  {formatRelativeTime(lead.lastActivityAt)}
                 </p>
-                <p className="text-[11px] text-[#52525b] truncate">{lead.businessType}</p>
               </div>
 
-              <p className="text-[13px] text-[#71717a] truncate self-center">{lead.ownerName}</p>
+              <div className="cursor-pointer rounded-xl px-4 py-3 transition-colors duration-150 hover:bg-[#161616] lg:hidden">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] text-[#a1a1aa]">{lead.businessName}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-[#52525b]">
+                      {lead.ownerName} · {lead.businessType}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-[11px] font-['Geist_Mono'] text-[#3f3f46]">
+                    {formatRelativeTime(lead.lastActivityAt)}
+                  </p>
+                </div>
 
-              <div className="flex items-center gap-1.5 self-center">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    lead.stage === 'Won'
-                      ? 'bg-[#22c55e]'
-                      : lead.stage === 'Lost'
-                        ? 'bg-[#ef4444]'
-                        : lead.stage === 'Negotiation'
-                          ? 'bg-[#f59e0b]'
-                          : lead.stage === 'Proposal sent'
-                            ? 'bg-[#f59e0b] opacity-60'
-                            : lead.stage === 'Meeting'
-                              ? 'bg-[#6366f1]'
-                              : lead.stage === 'Contacted'
-                                ? 'bg-[#6366f1] opacity-60'
-                                : 'bg-[#3f3f46]'
-                  }`}
-                />
-                <p className="text-[12px] text-[#71717a]">{lead.stage}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#71717a]">
+                  <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5">{lead.stage}</span>
+                  <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5">{lead.assignedTo.name}</span>
+                </div>
               </div>
-
-              <p className="text-[12px] text-[#52525b] self-center">{lead.assignedTo.name}</p>
-              <p className="text-[11px] text-[#3f3f46] font-['Geist_Mono'] self-center">
-                {formatRelativeTime(lead.lastActivityAt)}
-              </p>
             </div>
           ))}
+
+          {filteredLeads.length === 0 && (
+            <p className="px-5 py-8 text-center text-[12px] text-[#52525b]">No leads match your current filters.</p>
+          )}
         </div>
       </div>
     </div>

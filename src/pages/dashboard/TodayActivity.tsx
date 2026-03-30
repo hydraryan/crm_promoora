@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
@@ -65,6 +67,14 @@ export default function TodayActivity() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -125,77 +135,60 @@ export default function TodayActivity() {
 
   if (loading)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-4">
+      <div className="min-h-full space-y-4 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
+        <Skeleton className="h-12 w-64" />
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-[#111111] rounded-2xl h-24 animate-pulse" />
+          <Skeleton key={i} className="h-24" />
         ))}
       </div>
     )
 
   if (error)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <StatePanel
+        tone="error"
+        title="Unable to load today activity"
+        message={error}
+        actionLabel="Try again"
+        onAction={() => void fetchData()}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
     )
 
   if (!data)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">No activity data available yet.</p>
-          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-            Reload
-          </button>
-        </div>
-      </div>
+      <StatePanel
+        title="No activity data"
+        message="No activity data is available yet."
+        actionLabel="Reload"
+        onAction={() => void fetchData()}
+      />
     )
 
   return (
-    <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-6">
-      <div className="flex items-center gap-8 mb-2">
-        <div>
+    <div className="min-h-full space-y-6 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
+      <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-6">
+        <div className="rounded-2xl bg-[#111111] px-4 py-3">
           <p className="text-[28px] font-['Geist_Mono'] font-medium text-[#fafafa]">{data.activity.totalToday}</p>
           <p className="text-[11px] text-[#52525b] mt-0.5">actions today</p>
         </div>
-        <div className="w-px h-8 bg-[#1f1f1f]" />
-        <div>
+
+        <div className="rounded-2xl bg-[#111111] px-4 py-3">
           <p className="text-[28px] font-['Geist_Mono'] font-medium text-[#fafafa]">
             {data.followups.filter((f) => !f.isDone).length}
           </p>
           <p className="text-[11px] text-[#52525b] mt-0.5">follow-ups pending</p>
         </div>
-        <div className="w-px h-8 bg-[#1f1f1f]" />
-        <div>
+
+        <div className="rounded-2xl bg-[#111111] px-4 py-3">
           <p className="text-[28px] font-['Geist_Mono'] font-medium text-[#fafafa]">{data.newLeads.total}</p>
           <p className="text-[11px] text-[#52525b] mt-0.5">leads added today</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 2xl:grid-cols-5 gap-6">
-        <div className="2xl:col-span-3 bg-[#111111] rounded-2xl p-5">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        <div className="rounded-2xl bg-[#111111] p-5 xl:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <p className="text-[13px] font-medium text-[#a1a1aa]">Activity</p>
             <p className="text-[11px] text-[#52525b] font-['Geist_Mono']">{data.activity.totalToday}</p>
@@ -241,7 +234,7 @@ export default function TodayActivity() {
           </div>
         </div>
 
-        <div className="2xl:col-span-2 bg-[#111111] rounded-2xl p-5">
+        <div className="rounded-2xl bg-[#111111] p-5 xl:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <p className="text-[13px] font-medium text-[#a1a1aa]">Today's follow-ups</p>
             <p className="text-[11px] text-[#52525b] font-['Geist_Mono']">{data.followups.length}</p>
@@ -256,7 +249,7 @@ export default function TodayActivity() {
                 <button
                   type="button"
                   onClick={() => void markDone(item._id)}
-                  className="text-[11px] text-[#6366f1] opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  className="shrink-0 text-[11px] text-[#6366f1] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   Mark done
                 </button>
@@ -267,7 +260,7 @@ export default function TodayActivity() {
       </div>
 
       <div className="bg-[#111111] rounded-2xl p-5">
-        <div className="grid grid-cols-[1fr_160px_140px_140px_110px] gap-4 px-3 py-2 border-b border-[#1a1a1a]">
+        <div className="hidden grid-cols-[1fr_160px_140px_140px_110px] gap-4 border-b border-[#1a1a1a] px-3 py-2 lg:grid">
           {['Business name', 'Owner', 'Stage', 'Assigned to', 'Added at'].map((heading) => (
             <p key={heading} className="text-[11px] font-medium uppercase tracking-wider text-[#3f3f46]">
               {heading}
@@ -277,14 +270,35 @@ export default function TodayActivity() {
 
         <div className="divide-y divide-[#161616]">
           {data.newLeads.leads.map((lead) => (
-            <div key={lead._id} className="grid grid-cols-[1fr_160px_140px_140px_110px] gap-4 px-3 py-2.5">
-              <p className="text-[13px] text-[#a1a1aa] truncate">{lead.businessName}</p>
-              <p className="text-[12px] text-[#71717a] truncate">{lead.ownerName}</p>
-              <p className="text-[12px] text-[#71717a] truncate">{lead.stage}</p>
-              <p className="text-[12px] text-[#52525b] truncate">{lead.assignedTo.name}</p>
-              <p className="text-[11px] text-[#3f3f46] font-['Geist_Mono']">{formatRelativeTime(lead.createdAt)}</p>
+            <div key={lead._id}>
+              <div className="hidden grid-cols-[1fr_160px_140px_140px_110px] gap-4 px-3 py-2.5 lg:grid">
+                <p className="truncate text-[13px] text-[#a1a1aa]">{lead.businessName}</p>
+                <p className="truncate text-[12px] text-[#71717a]">{lead.ownerName}</p>
+                <p className="truncate text-[12px] text-[#71717a]">{lead.stage}</p>
+                <p className="truncate text-[12px] text-[#52525b]">{lead.assignedTo.name}</p>
+                <p className="text-[11px] font-['Geist_Mono'] text-[#3f3f46]">{formatRelativeTime(lead.createdAt)}</p>
+              </div>
+
+              <div className="rounded-xl px-3 py-3 lg:hidden">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] text-[#a1a1aa]">{lead.businessName}</p>
+                    <p className="mt-0.5 text-[11px] text-[#52525b]">{lead.ownerName}</p>
+                  </div>
+                  <p className="shrink-0 text-[11px] font-['Geist_Mono'] text-[#3f3f46]">{formatRelativeTime(lead.createdAt)}</p>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#71717a]">
+                  <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5">{lead.stage}</span>
+                  <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5">{lead.assignedTo.name}</span>
+                </div>
+              </div>
             </div>
           ))}
+
+          {data.newLeads.leads.length === 0 && (
+            <p className="px-3 py-6 text-center text-[12px] text-[#52525b]">No leads created today.</p>
+          )}
         </div>
       </div>
     </div>

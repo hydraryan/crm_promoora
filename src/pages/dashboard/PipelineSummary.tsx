@@ -1,5 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StatePanel } from '@/components/ui/state-panel'
 import { apiFetch } from '@/utils/apiFetch'
 import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
@@ -31,6 +33,14 @@ export default function PipelineSummary() {
   const [error, setError] = useState<string | null>(null)
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(['Cold']))
 
+  const clearSessionAndReload = () => {
+    localStorage.removeItem('crm_access_token')
+    localStorage.removeItem('crm_refresh_token')
+    localStorage.removeItem('crm_user')
+    sessionStorage.removeItem('crm_portal_secure_session')
+    window.location.reload()
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -60,56 +70,39 @@ export default function PipelineSummary() {
 
   if (loading)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-4">
+      <div className="min-h-full space-y-4 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
+        <Skeleton className="h-12 w-56" />
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-[#111111] rounded-2xl h-24 animate-pulse" />
+          <Skeleton key={i} className="h-24" />
         ))}
       </div>
     )
 
   if (error)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">{error}</p>
-          <div className="flex items-center justify-center gap-4">
-            <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-              Try again
-            </button>
-            {error.toLowerCase().includes('session expired') && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem('crm_access_token')
-                  localStorage.removeItem('crm_refresh_token')
-                  localStorage.removeItem('crm_user')
-                  sessionStorage.removeItem('crm_portal_secure_session')
-                  window.location.reload()
-                }}
-                className="text-sm text-[#ef4444] hover:text-[#f87171]"
-                type="button"
-              >
-                Log out
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <StatePanel
+        tone="error"
+        title="Unable to load pipeline"
+        message={error}
+        actionLabel="Try again"
+        onAction={() => void fetchData()}
+        secondaryActionLabel={error.toLowerCase().includes('session expired') ? 'Log out' : undefined}
+        onSecondaryAction={error.toLowerCase().includes('session expired') ? clearSessionAndReload : undefined}
+      />
     )
 
   if (!data)
     return (
-      <div className="min-h-full bg-[#0a0a0a] px-8 py-7 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-[#52525b] text-sm">No pipeline data available yet.</p>
-          <button onClick={() => void fetchData()} className="text-[#6366f1] text-sm hover:text-[#818cf8]" type="button">
-            Reload
-          </button>
-        </div>
-      </div>
+      <StatePanel
+        title="No pipeline data"
+        message="No pipeline data is available yet."
+        actionLabel="Reload"
+        onAction={() => void fetchData()}
+      />
     )
 
   return (
-    <div className="min-h-full bg-[#0a0a0a] px-8 py-7 space-y-6">
+    <div className="min-h-full space-y-6 bg-[#0a0a0a] px-4 py-6 sm:px-8 sm:py-7">
       <div className="bg-[#111111] rounded-2xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-medium text-[#a1a1aa]">Pipeline summary</p>
@@ -122,11 +115,11 @@ export default function PipelineSummary() {
               <button
                 type="button"
                 onClick={() => toggleStage(stage.name)}
-                className="w-full flex items-center gap-4 px-3 py-3 rounded-xl hover:bg-[#1a1a1a] cursor-pointer"
+                className="w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-3 hover:bg-[#1a1a1a] sm:flex sm:gap-4"
               >
                 <p className="flex-1 text-left text-[13px] font-medium text-[#a1a1aa]">{stage.name}</p>
                 <span className="text-[12px] font-['Geist_Mono'] text-[#52525b]">{stage.count}</span>
-                <div className="w-30 h-0.5 bg-[#1a1a1a] rounded-full overflow-hidden">
+                <div className="hidden h-0.5 w-20 overflow-hidden rounded-full bg-[#1a1a1a] sm:block sm:w-24">
                   <div
                     className="h-full bg-[#6366f1] rounded-full"
                     style={{
@@ -144,16 +137,13 @@ export default function PipelineSummary() {
               {expandedStages.has(stage.name) && (
                 <div className="ml-3 space-y-px border-l border-[#1f1f1f] pl-4 mb-2">
                   {stage.leads.map((lead) => (
-                    <div
-                      key={lead._id}
-                      className="flex items-center gap-4 px-3 py-2 rounded-xl hover:bg-[#1a1a1a] group"
-                    >
+                    <div key={lead._id} className="group flex items-center gap-4 rounded-xl px-3 py-2 hover:bg-[#1a1a1a]">
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] text-[#a1a1aa] group-hover:text-[#fafafa] truncate">{lead.businessName}</p>
                         <p className="text-[11px] text-[#52525b]">{lead.ownerName}</p>
                       </div>
-                      <p className="text-[11px] text-[#52525b] shrink-0">{lead.assignedTo.name}</p>
-                      <p className="text-[11px] text-[#3f3f46] font-['Geist_Mono'] shrink-0">
+                      <p className="hidden shrink-0 text-[11px] text-[#52525b] md:block">{lead.assignedTo.name}</p>
+                      <p className="shrink-0 text-[11px] font-['Geist_Mono'] text-[#3f3f46]">
                         {formatRelativeTime(lead.lastActivityAt)}
                       </p>
                     </div>
@@ -166,7 +156,7 @@ export default function PipelineSummary() {
       </div>
 
       <div className="bg-[#111111] rounded-2xl p-5">
-        <div className="flex items-center gap-6 text-[12px] text-[#52525b]">
+        <div className="flex flex-wrap items-center gap-3 text-[12px] text-[#52525b] sm:gap-6">
           <p>
             Won this month:{' '}
             <span className="font-['Geist_Mono'] text-[#22c55e]">{data.wonThisMonth}</span>

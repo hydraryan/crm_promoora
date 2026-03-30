@@ -38,20 +38,35 @@ function toMonthLabel(month: string) {
   return new Date(`${month}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 }
 
+function toMonthKeyIST(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date)
+
+  const year = parts.find((part) => part.type === 'year')?.value ?? '1970'
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01'
+  return `${year}-${month}`
+}
+
 export default function MemberProfile({ role, currentUserId, memberId, onBack }: MemberProfileProps) {
   const [loading, setLoading] = useState(true)
   const [member, setMember] = useState<TeamMember | null>(null)
   const [stats, setStats] = useState<Stats>({ leadsAssigned: 0, followupsPending: 0, projectsAssigned: 0, proposalsSent: 0 })
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [attendance, setAttendance] = useState<MonthlyAttendanceSummary | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [selectedMonth, setSelectedMonth] = useState(() => toMonthKeyIST(new Date()))
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [attendanceError, setAttendanceError] = useState<string | null>(null)
 
   const canView = canViewFullProfile(role, currentUserId, memberId)
   const canViewMonthAttendance = canViewAttendance(role, currentUserId, memberId)
 
   async function loadBase() {
     setLoading(true)
+    setError(null)
     try {
       const [memberRes, statsRes, activityRes] = await Promise.all([
         apiFetch<{ member: TeamMember }>(`/team/members/${memberId}`),
@@ -61,6 +76,8 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
       setMember(memberRes.member)
       setStats(statsRes)
       setActivities(activityRes.activities || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load member profile')
     } finally {
       setLoading(false)
     }
@@ -69,11 +86,18 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
   async function loadAttendance() {
     if (!canViewMonthAttendance) {
       setAttendance(null)
+      setAttendanceError(null)
       return
     }
 
-    const data = await apiFetch<{ attendance: MonthlyAttendanceSummary }>(`/team/members/${memberId}/attendance?month=${selectedMonth}`)
-    setAttendance(data.attendance)
+    setAttendanceError(null)
+    try {
+      const data = await apiFetch<{ attendance: MonthlyAttendanceSummary }>(`/team/members/${memberId}/attendance?month=${selectedMonth}`)
+      setAttendance(data.attendance)
+    } catch (err) {
+      setAttendance(null)
+      setAttendanceError(err instanceof Error ? err.message : 'Failed to load attendance')
+    }
   }
 
   useEffect(() => {
@@ -112,14 +136,15 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
   function prevMonth() {
     const d = new Date(`${selectedMonth}-01T00:00:00`)
     d.setMonth(d.getMonth() - 1)
-    setSelectedMonth(d.toISOString().slice(0, 7))
+    setSelectedMonth(toMonthKeyIST(d))
   }
 
   function nextMonth() {
     const d = new Date(`${selectedMonth}-01T00:00:00`)
     d.setMonth(d.getMonth() + 1)
-    if (d <= new Date()) {
-      setSelectedMonth(d.toISOString().slice(0, 7))
+    const nextMonth = toMonthKeyIST(d)
+    if (nextMonth <= toMonthKeyIST(new Date())) {
+      setSelectedMonth(nextMonth)
     }
   }
 
@@ -127,6 +152,17 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
     return (
       <div className="min-h-full rounded-2xl bg-[#111111] p-6">
         <p className="text-[13px] text-[#71717a]">You can only view your own profile.</p>
+        <button onClick={onBack} className="mt-3 rounded-lg bg-[#1a1a1a] px-3 py-1.5 text-[12px] text-[#a1a1aa] hover:bg-[#222222]">
+          Back to team
+        </button>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-full rounded-2xl bg-[#111111] p-6">
+        <p className="text-[13px] text-[#f87171]">{error}</p>
         <button onClick={onBack} className="mt-3 rounded-lg bg-[#1a1a1a] px-3 py-1.5 text-[12px] text-[#a1a1aa] hover:bg-[#222222]">
           Back to team
         </button>
@@ -239,10 +275,12 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
           </div>
 
           {!attendance ? (
-            <div className="rounded-2xl bg-[#111111] p-6 text-center text-[13px] text-[#52525b]">Attendance is only available for this member profile.</div>
+            <div className="rounded-2xl bg-[#111111] p-6 text-center text-[13px] text-[#52525b]">
+              {attendanceError ?? 'Attendance is only available for this member profile.'}
+            </div>
           ) : (
             <>
-              <div className="grid grid-cols-4 gap-4 rounded-2xl bg-[#111111] p-5">
+              <div className="grid grid-cols-2 gap-4 rounded-2xl bg-[#111111] p-5 sm:grid-cols-3 xl:grid-cols-6">
                 {[
                   { label: 'Present', value: attendance.presentDays, color: '#22c55e' },
                   { label: 'Absent', value: attendance.absentDays, color: '#ef4444' },
@@ -261,7 +299,7 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="h-0.75 flex-1 overflow-hidden rounded-full bg-[#1a1a1a]">
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#1a1a1a] sm:h-0.5">
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{
@@ -274,7 +312,7 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
               </div>
 
               <div className="overflow-hidden rounded-2xl bg-[#111111]">
-                <div className="grid grid-cols-[80px_1fr_90px_90px_110px_110px_90px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5">
+                <div className="hidden grid-cols-[80px_1fr_90px_90px_110px_110px_90px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5 lg:grid">
                   {['Date', 'Day', 'First login', 'Last logout', 'Login hrs', 'Active hrs', 'Prod'].map((header) => (
                     <p key={header} className="text-[10px] font-medium uppercase tracking-widest text-[#3f3f46]">
                       {header}
@@ -285,34 +323,54 @@ export default function MemberProfile({ role, currentUserId, memberId, onBack }:
                 {attendance.days
                   .filter((d) => d.isWorkingDay || d.status === 'present' || d.status === 'optional' || d.status === 'active')
                   .map((day) => (
-                    <div
-                      key={day.date}
-                      className={`grid grid-cols-[80px_1fr_90px_90px_110px_110px_90px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5 last:border-b-0 ${day.status === 'absent' ? 'opacity-40' : ''}`}
-                    >
-                      <p className="font-['Geist_Mono'] text-[12px] text-[#52525b]">{new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                      <p className="text-[12px] text-[#52525b]">
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.dayOfWeek]}
-                        {!day.isWorkingDay && <span className="ml-1.5 text-[10px] text-[#6366f1]">optional</span>}
-                      </p>
-                      <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">
-                        {day.firstLogin ? new Date(day.firstLogin).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                      </p>
-                      <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">
-                        {day.status === 'active' ? (
-                          <span className="text-[#22c55e]">Active</span>
-                        ) : day.lastLogout ? (
-                          new Date(day.lastLogout).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                        ) : (
-                          '—'
-                        )}
-                      </p>
-                      <p className={`font-['Geist_Mono'] text-[12px] ${day.loginMinutes > 0 ? 'text-[#a1a1aa]' : 'text-[#3f3f46]'}`}>
-                        {day.loginMinutes > 0 ? `${Math.floor(day.loginMinutes / 60)}h ${day.loginMinutes % 60}m` : '—'}
-                      </p>
-                      <p className={`font-['Geist_Mono'] text-[12px] ${day.activeMinutes > 0 ? 'text-[#22c55e]' : 'text-[#3f3f46]'}`}>
-                        {day.activeMinutes > 0 ? `${Math.floor(day.activeMinutes / 60)}h ${day.activeMinutes % 60}m` : '—'}
-                      </p>
-                      <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">{day.loginMinutes > 0 ? `${Math.round(day.productivityRatio * 100)}%` : '—'}</p>
+                    <div key={day.date}>
+                      <div
+                        className={`hidden grid-cols-[80px_1fr_90px_90px_110px_110px_90px] gap-3 border-b border-[#1a1a1a] px-4 py-2.5 last:border-b-0 lg:grid ${day.status === 'absent' ? 'opacity-40' : ''}`}
+                      >
+                        <p className="font-['Geist_Mono'] text-[12px] text-[#52525b]">{new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                        <p className="text-[12px] text-[#52525b]">
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.dayOfWeek]}
+                          {!day.isWorkingDay && <span className="ml-1.5 text-[10px] text-[#6366f1]">optional</span>}
+                        </p>
+                        <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">
+                          {day.firstLogin ? new Date(day.firstLogin).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </p>
+                        <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">
+                          {day.status === 'active' ? (
+                            <span className="text-[#22c55e]">Active</span>
+                          ) : day.lastLogout ? (
+                            new Date(day.lastLogout).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                          ) : (
+                            '—'
+                          )}
+                        </p>
+                        <p className={`font-['Geist_Mono'] text-[12px] ${day.loginMinutes > 0 ? 'text-[#a1a1aa]' : 'text-[#3f3f46]'}`}>
+                          {day.loginMinutes > 0 ? `${Math.floor(day.loginMinutes / 60)}h ${day.loginMinutes % 60}m` : '—'}
+                        </p>
+                        <p className={`font-['Geist_Mono'] text-[12px] ${day.activeMinutes > 0 ? 'text-[#22c55e]' : 'text-[#3f3f46]'}`}>
+                          {day.activeMinutes > 0 ? `${Math.floor(day.activeMinutes / 60)}h ${day.activeMinutes % 60}m` : '—'}
+                        </p>
+                        <p className="font-['Geist_Mono'] text-[12px] text-[#71717a]">{day.loginMinutes > 0 ? `${Math.round(day.productivityRatio * 100)}%` : '—'}</p>
+                      </div>
+
+                      <div className={`border-b border-[#1a1a1a] px-4 py-3 last:border-b-0 lg:hidden ${day.status === 'absent' ? 'opacity-40' : ''}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-['Geist_Mono'] text-[12px] text-[#a1a1aa]">{new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                          <p className="text-[11px] text-[#71717a]">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.dayOfWeek]}
+                            {!day.isWorkingDay && <span className="ml-1.5 text-[#6366f1]">optional</span>}
+                          </p>
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                          <p className="text-[#52525b]">First: <span className="font-['Geist_Mono'] text-[#71717a]">{day.firstLogin ? new Date(day.firstLogin).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}</span></p>
+                          <p className="text-[#52525b]">Last: <span className="font-['Geist_Mono'] text-[#71717a]">{day.status === 'active' ? 'Active' : day.lastLogout ? new Date(day.lastLogout).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}</span></p>
+                          <p className="text-[#52525b]">Login: <span className="font-['Geist_Mono'] text-[#a1a1aa]">{day.loginMinutes > 0 ? `${Math.floor(day.loginMinutes / 60)}h ${day.loginMinutes % 60}m` : '—'}</span></p>
+                          <p className="text-[#52525b]">Active: <span className="font-['Geist_Mono'] text-[#22c55e]">{day.activeMinutes > 0 ? `${Math.floor(day.activeMinutes / 60)}h ${day.activeMinutes % 60}m` : '—'}</span></p>
+                        </div>
+
+                        <p className="mt-2 text-[11px] text-[#52525b]">Productivity: <span className="font-['Geist_Mono'] text-[#a1a1aa]">{day.loginMinutes > 0 ? `${Math.round(day.productivityRatio * 100)}%` : '—'}</span></p>
+                      </div>
                     </div>
                   ))}
               </div>

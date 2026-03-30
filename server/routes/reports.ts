@@ -1,4 +1,5 @@
 import { Router, type Response } from 'express'
+import { Types } from 'mongoose'
 import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
 import { Lead } from '../models/Lead.js'
 import { User } from '../models/User.js'
@@ -281,36 +282,80 @@ router.get('/bd-performance', async (req: AuthRequest, res: Response) => {
     const { from: fromRaw, to: toRaw } = req.query as { from?: string; to?: string }
     const { from, to } = toDateRange(fromRaw, toRaw)
 
-    const users = await User.find({ status: 'active' }).populate('roleId', 'name').select('name avatarInitials roleId')
+    const users = await User.find({ status: 'active' }).populate('roleId', 'name').select('name avatarInitials roleId').lean()
     const members = users.filter((user) => {
       const roleName = (user.roleId as { name?: string })?.name
       return roleName === 'bd_intern' || roleName === 'admin'
     })
 
-    const rows = await Promise.all(
-      members.map(async (member) => {
-        const memberId = member._id.toString()
+    const memberIds = members.map((member) => member._id)
 
-        const [leadsContacted, followupsDone, proposalsSent, dealsWon] = await Promise.all([
-          Activity.countDocuments({ actor: memberId, type: { $in: ['lead_created', 'lead_stage_changed', 'stage_changed'] }, createdAt: { $gte: from, $lte: to } }),
-          Activity.countDocuments({ actor: memberId, type: 'followup_done', createdAt: { $gte: from, $lte: to } }),
-          Activity.countDocuments({ actor: memberId, type: 'proposal_sent', createdAt: { $gte: from, $lte: to } }),
-          Lead.countDocuments({ assignedTo: member._id, stage: 'Won', updatedAt: { $gte: from, $lte: to } }),
-        ])
+    const [activityRows, wonRows] = await Promise.all([
+      Activity.aggregate<{ _id: { actor: Types.ObjectId; type: string }; count: number }>([
+        {
+          $match: {
+            actor: { $in: memberIds },
+            type: { $in: ['lead_created', 'lead_stage_changed', 'stage_changed', 'followup_done', 'proposal_sent'] },
+            createdAt: { $gte: from, $lte: to },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              actor: '$actor',
+              type: '$type',
+            },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      Lead.aggregate<{ _id: Types.ObjectId; count: number }>([
+        {
+          $match: {
+            assignedTo: { $in: memberIds },
+            stage: 'Won',
+            updatedAt: { $gte: from, $lte: to },
+          },
+        },
+        {
+          $group: {
+            _id: '$assignedTo',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ])
 
-        return {
-          _id: memberId,
-          name: member.name,
-          initials: member.avatarInitials ?? 'NA',
-          role: (member.roleId as { name?: string })?.name ?? 'viewer',
-          leadsContacted,
-          followupsDone,
-          proposalsSent,
-          dealsWon,
-          conversionRate: leadsContacted > 0 ? (dealsWon / leadsContacted) * 100 : 0,
-        }
-      }),
-    )
+    const activityMap = new Map<string, Record<string, number>>()
+    for (const row of activityRows) {
+      const actorId = row._id.actor.toString()
+      const bucket = activityMap.get(actorId) ?? {}
+      bucket[row._id.type] = row.count
+      activityMap.set(actorId, bucket)
+    }
+
+    const wonMap = new Map(wonRows.map((row) => [row._id.toString(), row.count]))
+
+    const rows = members.map((member) => {
+      const memberId = member._id.toString()
+      const activity = activityMap.get(memberId) ?? {}
+      const leadsContacted = (activity.lead_created ?? 0) + (activity.lead_stage_changed ?? 0) + (activity.stage_changed ?? 0)
+      const followupsDone = activity.followup_done ?? 0
+      const proposalsSent = activity.proposal_sent ?? 0
+      const dealsWon = wonMap.get(memberId) ?? 0
+
+      return {
+        _id: memberId,
+        name: member.name,
+        initials: member.avatarInitials ?? 'NA',
+        role: (member.roleId as { name?: string })?.name ?? 'viewer',
+        leadsContacted,
+        followupsDone,
+        proposalsSent,
+        dealsWon,
+        conversionRate: leadsContacted > 0 ? (dealsWon / leadsContacted) * 100 : 0,
+      }
+    })
 
     const totals = {
       leadsContacted: rows.reduce((sum, row) => sum + row.leadsContacted, 0),
@@ -338,10 +383,10 @@ router.get('/followup-completion', async (req: AuthRequest, res: Response) => {
     const { from, to } = toDateRange(fromRaw, toRaw)
 
     const [scheduledRows, completedRows, overdueRows, activeUsers] = await Promise.all([
-      FollowUp.find({ dueAt: { $gte: from, $lte: to } }).populate('assignedTo', 'name avatarInitials').select('type assignedTo dueAt isDone doneAt'),
-      FollowUp.find({ isDone: true, doneAt: { $gte: from, $lte: to } }).populate('assignedTo', 'name avatarInitials').select('type assignedTo doneAt'),
-      FollowUp.find({ isDone: false, dueAt: { $gte: from, $lte: to, $lt: new Date() } }).populate('assignedTo', 'name avatarInitials').select('type assignedTo dueAt'),
-      User.find({ status: 'active' }).select('name avatarInitials'),
+      FollowUp.find({ dueAt: { $gte: from, $lte: to } }).populate('assignedTo', 'name avatarInitials').select('type assignedTo dueAt isDone doneAt').lean(),
+      FollowUp.find({ isDone: true, doneAt: { $gte: from, $lte: to } }).populate('assignedTo', 'name avatarInitials').select('type assignedTo doneAt').lean(),
+      FollowUp.find({ isDone: false, dueAt: { $gte: from, $lte: to, $lt: new Date() } }).populate('assignedTo', 'name avatarInitials').select('type assignedTo dueAt').lean(),
+      User.find({ status: 'active' }).select('name avatarInitials').lean(),
     ])
 
     const totalScheduled = scheduledRows.length

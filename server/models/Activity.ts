@@ -89,5 +89,7 @@ const activitySchema = new Schema<IActivity>(
 )
 
 activitySchema.index({ createdAt: -1, actor: 1 })
+activitySchema.index({ actor: 1, type: 1, createdAt: -1 })
+activitySchema.index({ actor: 1, createdAt: -1 })
 
 export const Activity = model<IActivity>('Activity', activitySchema)

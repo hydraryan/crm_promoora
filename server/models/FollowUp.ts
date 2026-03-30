@@ -106,6 +106,8 @@ const followUpSchema = new Schema<IFollowUp>(
 followUpSchema.index({ assignedTo: 1, dueAt: 1, isDone: 1 })
 followUpSchema.index({ targetType: 1, leadId: 1, clientId: 1 })
 followUpSchema.index({ searchPrefixes: 1, assignedTo: 1 })
+followUpSchema.index({ isDone: 1, dueAt: -1 })
+followUpSchema.index({ isDone: 1, doneAt: -1 })
 
 followUpSchema.pre('save', function () {
   const artifacts = buildSearchArtifacts([this.businessName, this.ownerName, this.note, this.type])

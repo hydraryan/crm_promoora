@@ -126,17 +126,20 @@ export default function AllFollowups({ defaultView, defaultType, defaultAssigned
     }
   }
 
-  const filteredFollowups = followups.filter((fu) => {
-    const target = fu.targetType === 'lead' ? fu.lead : fu.client
-    const matchSearch = !search || target?.businessName.toLowerCase().includes(search.toLowerCase())
-    const matchType = !typeFilter || fu.type === typeFilter
-    const matchTarget = !targetFilter || fu.targetType === targetFilter
-    const matchAssigned = !assignedFilter || fu.assignedTo._id === assignedFilter
-    const matchDone = showDone ? true : !fu.isDone
-    return matchSearch && matchType && matchTarget && matchAssigned && matchDone
-  })
+  const filteredFollowups = useMemo(() => {
+    const normalizedSearch = search.toLowerCase()
+    return followups.filter((fu) => {
+      const target = fu.targetType === 'lead' ? fu.lead : fu.client
+      const matchSearch = !normalizedSearch || target?.businessName.toLowerCase().includes(normalizedSearch)
+      const matchType = !typeFilter || fu.type === typeFilter
+      const matchTarget = !targetFilter || fu.targetType === targetFilter
+      const matchAssigned = !assignedFilter || fu.assignedTo._id === assignedFilter
+      const matchDone = showDone ? true : !fu.isDone
+      return matchSearch && matchType && matchTarget && matchAssigned && matchDone
+    })
+  }, [assignedFilter, followups, search, showDone, targetFilter, typeFilter])
 
-  const sortedFollowups = (() => {
+  const sortedFollowups = useMemo(() => {
     if (defaultAssignedToMe) {
       return [...filteredFollowups].sort((a, b) => {
         const aRank = a.isDone ? 2 : a.isOverdue ? 0 : 1
@@ -144,10 +147,6 @@ export default function AllFollowups({ defaultView, defaultType, defaultAssigned
         if (aRank !== bRank) return aRank - bRank
         return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
       })
-    }
-
-    if (defaultView === 'overdue') {
-      return [...filteredFollowups].sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
     }
 
     if (defaultView === 'today') {
@@ -158,7 +157,7 @@ export default function AllFollowups({ defaultView, defaultType, defaultAssigned
     }
 
     return [...filteredFollowups].sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
-  })()
+  }, [defaultAssignedToMe, defaultView, filteredFollowups])
 
   if (loading)
     return (
@@ -227,17 +226,17 @@ export default function AllFollowups({ defaultView, defaultType, defaultAssigned
       )}
 
       {defaultView === 'today' && (
-        <div className="mb-6 flex items-center gap-8">
+        <div className="mb-6 grid grid-cols-1 gap-4 rounded-2xl bg-[#111111] p-4 sm:grid-cols-[auto_auto_1fr] sm:items-center sm:gap-8">
           <div>
             <p className="font-['Geist_Mono'] text-[22px] font-medium text-[#fafafa]">{todayDone}</p>
             <p className="mt-0.5 text-[11px] text-[#52525b]">completed today</p>
           </div>
-          <div className="h-8 w-px bg-[#1f1f1f]" />
+          <div className="hidden h-8 w-px bg-[#1f1f1f] sm:block" />
           <div>
             <p className="font-['Geist_Mono'] text-[22px] font-medium text-[#fafafa]">{todayRemaining}</p>
             <p className="mt-0.5 text-[11px] text-[#52525b]">remaining</p>
           </div>
-          <div className="h-8 w-px bg-[#1f1f1f]" />
+          <div className="hidden h-8 w-px bg-[#1f1f1f] sm:block" />
           <div className="flex-1">
             <div className="mb-1.5 flex items-center justify-between">
               <p className="text-[11px] text-[#52525b]">Today's progress</p>
