@@ -3,8 +3,10 @@ import { ChevronRight, Plus, Search } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
 import { formatRelativeTime } from '@/utils/formatRelativeTime'
 import { API_STAGE_TO_STAGE, PIPELINE_STAGES, stageIcons, type PipelineStage } from '@/utils/leadConstants'
+import { usePermissions } from '@/context/PermissionContext'
 import NewLeadModal from './NewLeadModal'
 import ImportLeadsModal from './ImportLeadsModal'
+import ProspectorModal from './ProspectorModal'
 import LeadDetailDrawer from './LeadDetailDrawer'
 
 export interface Lead {
@@ -35,6 +37,7 @@ interface AllLeadsProps {
   titleOverride?: string
   openNewLeadModal?: boolean
   openImportModal?: boolean
+  openProspectorModal?: boolean
 }
 
 export default function AllLeads({
@@ -44,16 +47,9 @@ export default function AllLeads({
   titleOverride,
   openNewLeadModal,
   openImportModal,
+  openProspectorModal,
 }: AllLeadsProps) {
-  const storedUser = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('crm_user') ?? '{}') as { _id?: string; id?: string; role?: string }
-    } catch {
-      return {}
-    }
-  }, [])
-
-  const role = storedUser.role ?? 'viewer'
+  const { role, permissions } = usePermissions()
 
   const [leads, setLeads] = useState<Lead[]>([])
   const [total, setTotal] = useState(0)
@@ -67,6 +63,7 @@ export default function AllLeads({
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [showNewLeadModal, setShowNewLeadModal] = useState(Boolean(openNewLeadModal))
   const [showImportModal, setShowImportModal] = useState(Boolean(openImportModal))
+  const [showProspectorModal, setShowProspectorModal] = useState(Boolean(openProspectorModal))
 
   useEffect(() => {
     setShowNewLeadModal(Boolean(openNewLeadModal))
@@ -75,6 +72,10 @@ export default function AllLeads({
   useEffect(() => {
     setShowImportModal(Boolean(openImportModal))
   }, [openImportModal])
+
+  useEffect(() => {
+    setShowProspectorModal(Boolean(openProspectorModal))
+  }, [openProspectorModal])
 
   // Keep local filters aligned with route-like props when switching sidebar items.
   useEffect(() => {
@@ -251,12 +252,21 @@ export default function AllLeads({
           ))}
         </select>
 
-        {(role === 'admin' || role === 'bd_intern') && (
+        {permissions?.leads?.create && (
           <button
             onClick={() => setShowImportModal(true)}
             className="rounded-xl bg-[#111111] px-3 py-2 text-[13px] text-[#a1a1aa] transition-colors hover:bg-[#1a1a1a]"
           >
             Import CSV
+          </button>
+        )}
+
+        {permissions?.prospector?.view && (
+          <button
+            onClick={() => setShowProspectorModal(true)}
+            className="rounded-xl bg-[#111111] px-3 py-2 text-[13px] text-[#a1a1aa] transition-colors hover:bg-[#1a1a1a]"
+          >
+            Prospect Leads
           </button>
         )}
       </div>
@@ -355,6 +365,15 @@ export default function AllLeads({
         onImported={() => {
           refetch()
           setShowImportModal(false)
+        }}
+      />
+
+      <ProspectorModal
+        isOpen={showProspectorModal}
+        onClose={() => setShowProspectorModal(false)}
+        onImported={() => {
+          refetch()
+          setShowProspectorModal(false)
         }}
       />
 

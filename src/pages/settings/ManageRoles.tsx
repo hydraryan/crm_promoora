@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react'
 import { Check, ChevronRight, Plus, ShieldCheck, Trash2, X, Eye, EyeOff } from 'lucide-react'
 import { usePermissions } from '@/context/PermissionContext'
 import { apiFetch } from '@/utils/apiFetch'
-import { CRM_MODULES, defaultPerms, moduleActions, moduleLabels, type CRMRole, type PermAction } from '@/utils/settingsConstants'
+import {
+  CRM_MODULES,
+  defaultPerms,
+  moduleActions,
+  moduleLabels,
+  type CRMRole,
+  type PermAction,
+  type RolePermissions,
+} from '@/utils/settingsConstants'
 import type { Role } from '@/utils/teamConstants'
 
 interface ManageRolesProps {
@@ -31,6 +39,7 @@ export default function ManageRoles({ role }: ManageRolesProps) {
     name: '',
     color: '#6366f1',
     permissions: defaultPerms(),
+    dailySearchLimit: 5,
     disabledModules: [] as string[],
   })
 
@@ -56,6 +65,7 @@ export default function ManageRoles({ role }: ManageRolesProps) {
         name: nextRole.name, 
         color: nextRole.color, 
         permissions: nextRole.permissions,
+        dailySearchLimit: nextRole.dailySearchLimit ?? 5,
         disabledModules: nextRole.disabledModules ?? [],
       })
     } else {
@@ -64,6 +74,7 @@ export default function ManageRoles({ role }: ManageRolesProps) {
         name: '', 
         color: '#6366f1', 
         permissions: defaultPerms(),
+        dailySearchLimit: 5,
         disabledModules: [],
       })
     }
@@ -246,6 +257,20 @@ export default function ManageRoles({ role }: ManageRolesProps) {
               </div>
 
               <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Daily Search Limit</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    value={builderForm.dailySearchLimit}
+                    onChange={(event) => setBuilderForm((prev) => ({ ...prev, dailySearchLimit: Math.max(0, Number(event.target.value) || 0) }))}
+                    className="w-24 rounded-xl bg-[#1a1a1a] px-3 py-2 text-[13px] text-[#a1a1aa] outline-none focus:ring-1 focus:ring-[#6366f1]"
+                  />
+                  <p className="text-[12px] text-[#52525b]">Max Prospector searches per user per day</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Permissions</label>
 
                 <div className="grid grid-cols-[1fr_60px_60px_60px_60px] gap-2 px-3 py-2">
@@ -304,7 +329,7 @@ export default function ManageRoles({ role }: ManageRolesProps) {
                               delete: moduleActions[module].includes('delete'),
                             },
                           ]),
-                        ),
+                        ) as RolePermissions,
                       }))
                     }
                     className="text-[11px] text-[#6366f1] transition-colors hover:text-[#818cf8]"
@@ -316,7 +341,12 @@ export default function ManageRoles({ role }: ManageRolesProps) {
                     onClick={() =>
                       setBuilderForm((prev) => ({
                         ...prev,
-                        permissions: Object.fromEntries(CRM_MODULES.map((module) => [module, { view: false, create: false, edit: false, delete: false }])),
+                        permissions: Object.fromEntries(
+                          CRM_MODULES.map((module) => [
+                            module,
+                            { view: false, create: false, edit: false, delete: false },
+                          ]),
+                        ) as RolePermissions,
                       }))
                     }
                     className="text-[11px] text-[#3f3f46] transition-colors hover:text-[#52525b]"

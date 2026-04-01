@@ -3,16 +3,14 @@ import { authenticateToken, type AuthRequest } from '../middleware/auth.js'
 import { getAuthContext, hasModulePermission, isAdmin } from './_helpers.js'
 import { ProspectorJob, type ProspectorProvider } from '../models/ProspectorJob.js'
 import { Lead } from '../models/Lead.js'
+import { User } from '../models/User.js'
+import { Role } from '../models/Role.js'
 import { Activity } from '../models/Activity.js'
 import { runProspectorQuery, mapCandidateBusinessType } from '../services/prospector.js'
 
 const router = Router()
 
 router.use(authenticateToken)
-
-function canUseProspector(roleName: string): boolean {
-  return roleName === 'admin' || roleName === 'bd_intern'
-}
 
 function normalizeProviders(raw: unknown): ProspectorProvider[] {
   const supported: ProspectorProvider[] = ['google-maps']
@@ -24,8 +22,31 @@ router.post('/jobs', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
-    if (!canUseProspector(auth.roleName) || !hasModulePermission(auth, 'leads', 'create')) {
+    if (!hasModulePermission(auth, 'prospector', 'create')) {
       return res.status(403).json({ error: 'Not allowed to run prospector jobs' })
+    }
+
+    // Limit check
+    if (!isAdmin(auth.roleName)) {
+      const user = await User.findById(auth.userId).populate('roleId')
+      if (!user) return res.status(401).json({ error: 'User not found' })
+
+      const role = user.roleId as any
+      const limit = user.prospectorBudgetOverride ?? role?.dailySearchLimit ?? 5
+
+      const startOfDay = new Date()
+      startOfDay.setHours(0, 0, 0, 0)
+
+      const count = await ProspectorJob.countDocuments({
+        createdBy: auth.userId,
+        createdAt: { $gte: startOfDay },
+      })
+
+      if (count >= limit) {
+        return res.status(403).json({
+          error: `Daily search limit reached (${limit}). Please contact your admin.`,
+        })
+      }
     }
 
     const body = req.body as {
@@ -33,6 +54,7 @@ router.post('/jobs', async (req: AuthRequest, res: Response) => {
       minReviews?: number
       recencyDays?: number
       maxResults?: number
+      onlyNoWebsite?: boolean
       providers?: ProspectorProvider[]
     }
 
@@ -45,6 +67,7 @@ router.post('/jobs', async (req: AuthRequest, res: Response) => {
       minReviews: Math.max(0, Math.floor(body.minReviews ?? 200)),
       recencyDays: Math.max(1, Math.floor(body.recencyDays ?? 30)),
       maxResults: Math.min(200, Math.max(1, Math.floor(body.maxResults ?? 25))),
+      onlyNoWebsite: Boolean(body.onlyNoWebsite),
     }
 
     const providers = normalizeProviders(body.providers)
@@ -87,7 +110,7 @@ router.get('/jobs', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
-    if (!hasModulePermission(auth, 'leads', 'view')) {
+    if (!hasModulePermission(auth, 'prospector', 'view')) {
       return res.status(403).json({ error: 'Not allowed to view prospector jobs' })
     }
 
@@ -122,7 +145,7 @@ router.get('/jobs/:id', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
-    if (!hasModulePermission(auth, 'leads', 'view')) {
+    if (!hasModulePermission(auth, 'prospector', 'view')) {
       return res.status(403).json({ error: 'Not allowed to view prospector jobs' })
     }
 
@@ -156,7 +179,7 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
   try {
     const auth = await getAuthContext(req)
     if (!auth) return res.status(401).json({ error: 'Not authenticated' })
-    if (!canUseProspector(auth.roleName) || !hasModulePermission(auth, 'leads', 'create')) {
+    if (!hasModulePermission(auth, 'prospector', 'view') || !hasModulePermission(auth, 'leads', 'create')) {
       return res.status(403).json({ error: 'Not allowed to import prospector leads' })
     }
 
@@ -194,8 +217,13 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
       }
 
       const duplicate = await Lead.findOne({
-        businessName: new RegExp(`^${candidate.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-        ...(candidate.phone ? { phone: candidate.phone } : {}),
+        $or: [
+          ...(candidate.placeId ? [{ sourcePlaceId: candidate.placeId }] : []),
+          {
+            businessName: new RegExp(`^${candidate.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+            ...(candidate.phone ? { phone: candidate.phone } : {}),
+          },
+        ],
       }).lean()
 
       if (duplicate) {
@@ -203,10 +231,20 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
         continue
       }
 
+      const leadPhone = candidate.phone?.trim() || candidate.phone || 'NA'
+
       await Lead.create({
         businessName: candidate.name,
         ownerName: candidate.name,
-        phone: candidate.phone?.trim() || 'NA',
+        phone: leadPhone,
+        sourceProvider: candidate.source,
+        sourcePlaceId: candidate.placeId,
+        sourcePlaceUrl: candidate.placeUrl,
+        sourceWebsite: candidate.website,
+        sourcePhone: candidate.phone,
+        sourceAddress: candidate.formattedAddress ?? candidate.address,
+        sourceCategory: candidate.primaryType ?? candidate.category,
+        sourceOpeningHours: candidate.openingHours ?? [],
         email: undefined,
         businessType: mapCandidateBusinessType(candidate),
         stage: 'Cold',
@@ -214,6 +252,10 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
         notes: [
           `Prospector Query: ${job.query}`,
           `Source: ${candidate.source}`,
+          candidate.placeId ? `Place ID: ${candidate.placeId}` : undefined,
+          candidate.placeUrl ? `Maps: ${candidate.placeUrl}` : undefined,
+          candidate.website ? `Website: ${candidate.website}` : undefined,
+          candidate.phone ? `Phone: ${candidate.phone}` : undefined,
           `Reviews: ${candidate.reviewCount}`,
           candidate.rating ? `Rating: ${candidate.rating}` : undefined,
           `Footfall: ${candidate.footfallBand} (${candidate.footfallDailyMin}-${candidate.footfallDailyMax}/day)`,

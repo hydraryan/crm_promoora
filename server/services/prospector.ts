@@ -23,8 +23,29 @@ type GoogleSearchPlace = {
   types?: string[]
 }
 
+type GooglePlaceDetails = {
+  id?: string
+  displayName?: { text?: string }
+  formattedAddress?: string
+  internationalPhoneNumber?: string
+  nationalPhoneNumber?: string
+  websiteUri?: string
+  googleMapsUri?: string
+  primaryType?: string
+  types?: string[]
+  regularOpeningHours?: {
+    weekdayDescriptions?: string[]
+  }
+}
+
 type GoogleSearchResponse = {
   places?: GoogleSearchPlace[]
+  error?: {
+    message?: string
+  }
+}
+
+type GooglePlaceDetailsResponse = GooglePlaceDetails & {
   error?: {
     message?: string
   }
@@ -93,7 +114,9 @@ function dedupeCandidates(rows: IProspectorCandidate[]): IProspectorCandidate[] 
   const deduped: IProspectorCandidate[] = []
 
   for (const row of rows) {
-    const key = `${normalizeKey(row.name)}|${normalizeKey(row.phone ?? '')}|${normalizeKey(row.address ?? '')}`
+    const key = row.placeId
+      ? `place:${row.placeId}`
+      : `${normalizeKey(row.name)}|${normalizeKey(row.phone ?? '')}|${normalizeKey(row.address ?? row.formattedAddress ?? '')}`
     if (seen.has(key)) continue
     seen.add(key)
     deduped.push(row)
@@ -102,12 +125,105 @@ function dedupeCandidates(rows: IProspectorCandidate[]): IProspectorCandidate[] 
   return deduped
 }
 
+async function fetchGooglePlaceDetails(apiKey: string, placeId: string): Promise<GooglePlaceDetails | null> {
+  const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+    method: 'GET',
+    headers: {
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask':
+        'id,displayName,formattedAddress,internationalPhoneNumber,nationalPhoneNumber,websiteUri,googleMapsUri,primaryType,types,regularOpeningHours.weekdayDescriptions',
+    },
+  })
+
+  const payload = (await response.json()) as GooglePlaceDetailsResponse
+  if (!response.ok) {
+    return null
+  }
+
+  return payload
+}
+
+function toPlacePhone(details: GooglePlaceDetails): string | undefined {
+  return details.internationalPhoneNumber?.trim() || details.nationalPhoneNumber?.trim() || undefined
+}
+
+async function enrichGoogleCandidate(item: GoogleSearchPlace, apiKey: string, minReviews: number): Promise<IProspectorCandidate | null> {
+  const reviewCount = Math.max(0, item.userRatingCount ?? 0)
+  const rating = typeof item.rating === 'number' ? item.rating : undefined
+  const isOperational = (item.businessStatus ?? '').toUpperCase() === 'OPERATIONAL'
+  const activeScore = toActiveScore({ reviewCount, rating, isOperational })
+  const confidence = toConfidence(reviewCount)
+  const footfall = toFootfallEstimate(reviewCount, rating)
+
+  const placeId = item.id?.trim()
+  let placeDetails: GooglePlaceDetails | null = null
+  if (placeId) {
+    placeDetails = await fetchGooglePlaceDetails(apiKey, placeId)
+  }
+
+  const website = placeDetails?.websiteUri?.trim() || undefined
+  const placeUrl = placeDetails?.googleMapsUri?.trim() || undefined
+  const openingHours = placeDetails?.regularOpeningHours?.weekdayDescriptions ?? []
+  const primaryType = placeDetails?.primaryType?.trim() || item.types?.[0]
+  const phone = placeDetails ? toPlacePhone(placeDetails) : undefined
+  const address = placeDetails?.formattedAddress?.trim() || item.formattedAddress?.trim() || undefined
+
+  const signals: string[] = []
+  signals.push(`${reviewCount} reviews`)
+  if (typeof rating === 'number') {
+    signals.push(`rating ${rating.toFixed(1)}`)
+  }
+  signals.push(isOperational ? 'operational listing' : 'status unknown')
+  if (phone) signals.push('phone available')
+  if (website) signals.push('website available')
+  if (openingHours.length > 0) signals.push('opening hours available')
+
+  const candidate: IProspectorCandidate = {
+    candidateId: randomUUID(),
+    source: 'google-maps' as const,
+    placeId,
+    name: placeDetails?.displayName?.text?.trim() ?? item.displayName?.text?.trim() ?? '',
+    address,
+    formattedAddress: address,
+    phone,
+    website,
+    placeUrl,
+    category: primaryType,
+    primaryType,
+    rating,
+    reviewCount,
+    latestReviewAt: undefined,
+    isActive: isOperational && reviewCount >= minReviews,
+    activeScore,
+    footfallBand: footfall.footfallBand,
+    footfallDailyMin: footfall.footfallDailyMin,
+    footfallDailyMax: footfall.footfallDailyMax,
+    footfallWeeklyMin: footfall.footfallWeeklyMin,
+    footfallWeeklyMax: footfall.footfallWeeklyMax,
+    confidence,
+    signals,
+    openingHours,
+  }
+
+  return candidate.name.length > 0 ? candidate : null
+}
+
 async function fetchGoogleMapsCandidates(query: string, filters: IProspectorFilters): Promise<ProviderResult> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY
+  const apiKey =
+    process.env.GOOGLE_PLACES_API_KEY ??
+    process.env.GOOGLE_MAPS_API_KEY ??
+    process.env.GOOGLE_API_KEY ??
+    process.env.VITE_GOOGLE_MAPS_API_KEY
   if (!apiKey) {
     return {
       candidates: [],
-      errors: [{ source: 'google-maps', message: 'GOOGLE_PLACES_API_KEY is not configured' }],
+      errors: [
+        {
+          source: 'google-maps',
+          message:
+            'Google Maps API key not found. Set GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_API_KEY / GOOGLE_API_KEY) in server environment.',
+        },
+      ],
     }
   }
 
@@ -146,46 +262,12 @@ async function fetchGoogleMapsCandidates(query: string, filters: IProspectorFilt
     }
   }
 
-  const candidates: IProspectorCandidate[] = payload.places
-    .map((item) => {
-      const reviewCount = Math.max(0, item.userRatingCount ?? 0)
-      const rating = typeof item.rating === 'number' ? item.rating : undefined
-      const isOperational = (item.businessStatus ?? '').toUpperCase() === 'OPERATIONAL'
-      const activeScore = toActiveScore({ reviewCount, rating, isOperational })
-      const confidence = toConfidence(reviewCount)
-      const footfall = toFootfallEstimate(reviewCount, rating)
-
-      const signals: string[] = []
-      signals.push(`${reviewCount} reviews`) 
-      if (typeof rating === 'number') {
-        signals.push(`rating ${rating.toFixed(1)}`)
-      }
-      signals.push(isOperational ? 'operational listing' : 'status unknown')
-
-      return {
-        candidateId: randomUUID(),
-        source: 'google-maps' as const,
-        name: item.displayName?.text?.trim() ?? '',
-        address: item.formattedAddress?.trim() ?? undefined,
-        phone: undefined,
-        website: undefined,
-        category: item.types?.[0],
-        rating,
-        reviewCount,
-        latestReviewAt: undefined,
-        isActive: isOperational && reviewCount >= filters.minReviews,
-        activeScore,
-        footfallBand: footfall.footfallBand,
-        footfallDailyMin: footfall.footfallDailyMin,
-        footfallDailyMax: footfall.footfallDailyMax,
-        footfallWeeklyMin: footfall.footfallWeeklyMin,
-        footfallWeeklyMax: footfall.footfallWeeklyMax,
-        confidence,
-        signals,
-      }
-    })
-    .filter((candidate) => candidate.name.length > 0)
+  const candidates = (
+    await Promise.all(payload.places.map((item) => enrichGoogleCandidate(item, apiKey, filters.minReviews)))
+  )
+    .filter((candidate): candidate is IProspectorCandidate => candidate !== null)
     .filter((candidate) => candidate.reviewCount >= filters.minReviews)
+    .filter((candidate) => (filters.onlyNoWebsite ? !candidate.website : true))
 
   return { candidates, errors: [] }
 }

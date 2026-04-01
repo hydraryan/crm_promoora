@@ -8,11 +8,15 @@ export type ConfidenceBand = 'low' | 'medium' | 'high'
 export interface IProspectorCandidate {
   candidateId: string
   source: ProspectorProvider
+  placeId?: string
   name: string
   address?: string
+  formattedAddress?: string
   phone?: string
   website?: string
+  placeUrl?: string
   category?: string
+  primaryType?: string
   rating?: number
   reviewCount: number
   latestReviewAt?: Date
@@ -25,6 +29,7 @@ export interface IProspectorCandidate {
   footfallWeeklyMax: number
   confidence: ConfidenceBand
   signals: string[]
+  openingHours?: string[]
 }
 
 export interface IProspectorProviderError {
@@ -36,6 +41,7 @@ export interface IProspectorFilters {
   minReviews: number
   recencyDays: number
   maxResults: number
+  onlyNoWebsite?: boolean
 }
 
 export interface IProspectorJob extends Document {
@@ -56,11 +62,15 @@ const prospectorCandidateSchema = new Schema<IProspectorCandidate>(
   {
     candidateId: { type: String, required: true, trim: true },
     source: { type: String, enum: ['google-maps', 'justdial', 'indiamart'], required: true },
+    placeId: { type: String, trim: true, index: true },
     name: { type: String, required: true, trim: true },
     address: { type: String, trim: true },
+    formattedAddress: { type: String, trim: true },
     phone: { type: String, trim: true },
     website: { type: String, trim: true },
+    placeUrl: { type: String, trim: true },
     category: { type: String, trim: true },
+    primaryType: { type: String, trim: true },
     rating: { type: Number, min: 0, max: 5 },
     reviewCount: { type: Number, default: 0, min: 0 },
     latestReviewAt: { type: Date },
@@ -73,6 +83,7 @@ const prospectorCandidateSchema = new Schema<IProspectorCandidate>(
     footfallWeeklyMax: { type: Number, min: 0, required: true },
     confidence: { type: String, enum: ['low', 'medium', 'high'], required: true },
     signals: { type: [String], default: [] },
+    openingHours: { type: [String], default: [] },
   },
   { _id: false }
 )
@@ -93,6 +104,7 @@ const prospectorJobSchema = new Schema<IProspectorJob>(
       minReviews: { type: Number, required: true, default: 200, min: 0 },
       recencyDays: { type: Number, required: true, default: 30, min: 1 },
       maxResults: { type: Number, required: true, default: 25, min: 1, max: 200 },
+      onlyNoWebsite: { type: Boolean, default: false },
     },
     providers: {
       type: [String],

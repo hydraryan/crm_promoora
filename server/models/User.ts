@@ -13,6 +13,7 @@ export interface IUser extends Document {
   roleId: Types.ObjectId
   status: 'active' | 'inactive' | 'suspended'
   isEmailVerified: boolean
+  prospectorBudgetOverride?: number
   lastLoginAt?: Date
   passwordChangedAt?: Date
   createdBy?: Types.ObjectId
@@ -80,6 +81,10 @@ const userSchema = new Schema<IUser>(
     isEmailVerified: {
       type: Boolean,
       default: false,
+    },
+    prospectorBudgetOverride: {
+      type: Number,
+      min: 0,
     },
     lastLoginAt: {
       type: Date,

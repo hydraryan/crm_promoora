@@ -11,7 +11,16 @@ export const seedRoles = async (): Promise<IRole[]> => {
     // Check if roles already exist
     const existingRoles = await Role.countDocuments()
     if (existingRoles > 0) {
-      console.log('Roles already seeded. Skipping...')
+      await Role.updateOne(
+        { name: 'admin', 'permissions.prospector': { $exists: false } },
+        { $set: { 'permissions.prospector': ['read', 'create'] } },
+      )
+      await Role.updateMany(
+        { 'permissions.prospector': { $exists: false } },
+        { $set: { 'permissions.prospector': [] } },
+      )
+
+      console.log('Roles already seeded. Applied prospector backfill and skipped fresh role seeding.')
       return await Role.find()
     }
 
@@ -28,6 +37,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
           proposals: ['create', 'read'],
           invoices: [],
           invoicing: [],
+          prospector: ['create', 'read'],
           communication: ['read'],
           reports: ['read'],
           team: ['read'],
@@ -47,6 +57,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
           proposals: ['create', 'read'],
           invoices: [],
           invoicing: [],
+          prospector: ['read'],
           communication: ['read'],
           reports: ['read'],
           team: ['read'],
@@ -66,6 +77,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
           proposals: ['read'],
           invoices: [],
           invoicing: [],
+          prospector: [],
           communication: [],
           reports: ['read'],
           team: ['read'],
@@ -85,6 +97,7 @@ export const seedRoles = async (): Promise<IRole[]> => {
           proposals: ['read'],
           invoices: [],
           invoicing: [],
+          prospector: [],
           communication: [],
           reports: ['read'],
           team: ['read'],

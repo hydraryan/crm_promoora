@@ -6,6 +6,7 @@ export const CRM_MODULES = [
   'followups',
   'proposals',
   'invoicing',
+  'prospector',
   'team',
   'communication',
   'reports',
@@ -22,6 +23,7 @@ export const moduleLabels: Record<CRMModule, string> = {
   followups: 'Follow-ups',
   proposals: 'Proposals',
   invoicing: 'Invoicing',
+  prospector: 'Prospector',
   team: 'Team',
   communication: 'Communication',
   reports: 'Reports',
@@ -38,13 +40,21 @@ export const moduleActions: Record<CRMModule, PermAction[]> = {
   followups: ['view', 'create', 'edit', 'delete'],
   proposals: ['view', 'create', 'edit', 'delete'],
   invoicing: ['view', 'create', 'edit', 'delete'],
+  prospector: ['view', 'create'],
   team: ['view', 'create', 'edit', 'delete'],
   communication: ['view'],
   reports: ['view'],
   settings: ['view'],
 }
 
-export interface RolePermissions {
+export type RolePermissions = {
+  [K in (typeof CRM_MODULES)[number]]: {
+    view: boolean
+    create: boolean
+    edit: boolean
+    delete: boolean
+  }
+} & {
   [module: string]: {
     view: boolean
     create: boolean
@@ -60,6 +70,7 @@ export interface CRMRole {
   color: string
   isSystem: boolean
   permissions: RolePermissions
+  dailySearchLimit: number
   disabledModules?: string[]
   memberCount: number
   createdAt: string
@@ -75,7 +86,7 @@ export const SYSTEM_ROLES: Pick<CRMRole, 'name' | 'color' | 'isSystem'>[] = [
 export function defaultPerms(): RolePermissions {
   const perms = Object.fromEntries(
     CRM_MODULES.map((module) => [module, { view: false, create: false, edit: false, delete: false }]),
-  )
+  ) as RolePermissions
   // Dashboard should be visible by default unless explicitly disabled.
   perms.dashboard.view = true
   return perms

@@ -3,6 +3,7 @@ import { apiFetch } from '@/utils/apiFetch'
 import type { RolePermissions } from '@/utils/settingsConstants'
 
 interface PermissionContextType {
+  role: string | null
   permissions: RolePermissions | null
   disabledModules: string[]
   isLoading: boolean
@@ -12,6 +13,7 @@ interface PermissionContextType {
 const PermissionContext = createContext<PermissionContextType | null>(null)
 
 export function PermissionProvider({ children }: { children: ReactNode }) {
+  const [role, setRole] = useState<string | null>(null)
   const [permissions, setPermissions] = useState<RolePermissions | null>(null)
   const [disabledModules, setDisabledModules] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -28,6 +30,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
         permissions: RolePermissions
         disabledModules: string[]
       }>('/auth/me')
+      setRole(response.user.role)
       setPermissions(response.permissions ?? null)
       setDisabledModules(response.disabledModules ?? [])
     } catch (error) {
@@ -40,7 +43,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   return (
-    <PermissionContext.Provider value={{ permissions, disabledModules, isLoading, refresh }}>
+    <PermissionContext.Provider value={{ role, permissions, disabledModules, isLoading, refresh }}>
       {children}
     </PermissionContext.Provider>
   )

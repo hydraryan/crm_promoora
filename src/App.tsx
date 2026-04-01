@@ -283,6 +283,10 @@ function ProtectedDashboard({ onLogout }: { onLogout: () => void }) {
         return <AllLeads openImportModal />
       }
 
+      if (activeItemId === 'leads/prospector') {
+        return <AllLeads openProspectorModal />
+      }
+
       const stage = stageFromItem(activeItemId)
       if (stage) {
         return <AllLeads defaultStage={stage} />

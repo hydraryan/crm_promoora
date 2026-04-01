@@ -8,7 +8,20 @@ import { getAuthContext, isAdmin } from './_helpers.js'
 const router = Router()
 router.use(authenticateToken)
 
-const CRM_MODULES = ['dashboard', 'leads', 'clients', 'projects', 'followups', 'proposals', 'invoicing', 'team', 'communication', 'reports', 'settings'] as const
+const CRM_MODULES = [
+  'dashboard',
+  'leads',
+  'clients',
+  'projects',
+  'followups',
+  'proposals',
+  'invoicing',
+  'prospector',
+  'team',
+  'communication',
+  'reports',
+  'settings',
+] as const
 const ACTIONS = ['view', 'create', 'edit', 'delete'] as const
 const STORAGE_KEY_BY_MODULE: Record<CRMModule, string> = {
   dashboard: 'dashboard',
@@ -18,6 +31,7 @@ const STORAGE_KEY_BY_MODULE: Record<CRMModule, string> = {
   followups: 'followups',
   proposals: 'proposals',
   invoicing: 'invoices',
+  prospector: 'prospector',
   team: 'team',
   communication: 'communication',
   reports: 'reports',
@@ -49,7 +63,12 @@ function toMatrix(role: IRole): RoleMatrix {
 
   CRM_MODULES.forEach((module) => {
     const storageKey = STORAGE_KEY_BY_MODULE[module]
-    const aliases = module === 'invoicing' ? ['invoicing', 'invoices'] : [storageKey]
+    const aliases =
+      module === 'invoicing'
+        ? ['invoicing', 'invoices']
+        : module === 'prospector'
+          ? ['prospector']
+          : [storageKey]
     const actions = aliases.flatMap((key) => raw?.[key] ?? [])
     actions.forEach((action) => {
       const normalized = normalizeStoredAction(action)
@@ -65,7 +84,10 @@ function toMatrix(role: IRole): RoleMatrix {
 function matrixToStoredPermissions(matrix: RoleMatrix) {
   const permissions = Object.fromEntries(
     CRM_MODULES.map((module) => {
-      const actions = ACTIONS.filter((action) => Boolean(matrix[module]?.[action]))
+      const actions = (['view', 'create', 'edit', 'delete'] as PermAction[])
+        .filter((action) => Boolean(matrix[module]?.[action]))
+        .map((a) => (a === 'view' ? 'read' : a === 'edit' ? 'update' : a))
+
       return [STORAGE_KEY_BY_MODULE[module], actions]
     }),
   )
@@ -101,6 +123,7 @@ function roleToResponse(role: IRole, memberCount: number) {
     color: role.color ?? '#6366f1',
     isSystem: role.isSystemRole,
     permissions: toMatrix(role),
+    dailySearchLimit: role.dailySearchLimit ?? 0,
     disabledModules: role.disabledModules ?? [],
     memberCount,
     createdAt: role.createdAt,
@@ -156,10 +179,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     if (!(await requireAdmin(req, res))) return
 
-    const { name, color, permissions, disabledModules } = req.body as { 
+    const { name, color, permissions, dailySearchLimit, disabledModules } = req.body as { 
       name?: string
       color?: string
       permissions?: unknown
+      dailySearchLimit?: number
       disabledModules?: string[]
     }
 
@@ -179,6 +203,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       color: color?.trim() || '#6366f1',
       isSystemRole: false,
       permissions: matrixToStoredPermissions(parseMatrix(permissions)),
+      dailySearchLimit: typeof dailySearchLimit === 'number' ? Math.max(0, dailySearchLimit) : 5,
       disabledModules: Array.isArray(disabledModules) ? disabledModules : [],
     })
 
@@ -201,10 +226,11 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     const role = await Role.findById(roleId)
     if (!role) return res.status(404).json({ error: 'Role not found' })
 
-    const { name, color, permissions, disabledModules } = req.body as { 
+    const { name, color, permissions, dailySearchLimit, disabledModules } = req.body as { 
       name?: string
       color?: string
       permissions?: unknown
+      dailySearchLimit?: number
       disabledModules?: string[]
     }
 
@@ -229,6 +255,10 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
 
     if (permissions) {
       role.permissions = matrixToStoredPermissions(parseMatrix(permissions)) as IRole['permissions']
+    }
+
+    if (typeof dailySearchLimit === 'number') {
+      role.dailySearchLimit = Math.max(0, dailySearchLimit)
     }
 
     if (Array.isArray(disabledModules)) {

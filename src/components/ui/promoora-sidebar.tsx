@@ -197,6 +197,7 @@ const SECTION_CONFIG: Record<SectionKey, SectionConfig> = {
         label: 'Quick Actions',
         items: [
           { id: 'leads/new', label: 'Add new lead', icon: Plus },
+          { id: 'leads/prospector', label: 'Prospect leads', icon: Globe },
           { id: 'leads/import', label: 'Import leads', icon: Upload },
         ],
       },
@@ -484,7 +485,7 @@ function SidebarIcon({ icon: Icon }: { icon: LucideIcon }) {
 }
 
 export function PromoosaSidebar({
-  role,
+  role: _roleProps, // Use role from context instead
   activeSection,
   onSectionChange,
   isDetailCollapsed,
@@ -498,6 +499,9 @@ export function PromoosaSidebar({
       return null
     }
   })()
+
+  // Prioritize role from context, fallback to props/localStorage
+  const role = (permissionCtx?.role as Role) || (_roleProps as Role) || 'viewer'
 
   const canAccessSection = (section: SectionKey): boolean => {
     if (permissionCtx) {
@@ -514,6 +518,11 @@ export function PromoosaSidebar({
   }
 
   const canSeeMenuItem = (itemId: string, section: SectionKey): boolean => {
+    if (itemId === 'leads/prospector') {
+      if (permissionCtx) return Boolean(permissionCtx.permissions?.prospector?.view)
+      return role === 'admin'
+    }
+
     if (section === 'team' && itemId === 'team/add') {
       if (permissionCtx) return Boolean(permissionCtx.permissions?.team?.create)
       return role === 'admin'

@@ -374,7 +374,20 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
     const roleDoc = (user.roleId as any)
 
     const toMatrix = (role: any) => {
-      const CRM_MODULES = ['dashboard', 'leads', 'clients', 'projects', 'followups', 'proposals', 'invoicing', 'team', 'communication', 'reports', 'settings'] as const
+      const CRM_MODULES = [
+        'dashboard',
+        'leads',
+        'clients',
+        'projects',
+        'followups',
+        'proposals',
+        'invoicing',
+        'team',
+        'communication',
+        'reports',
+        'settings',
+        'prospector',
+      ] as const
       const ACTIONS = ['view', 'create', 'edit', 'delete'] as const
       const result = Object.fromEntries(
         CRM_MODULES.map((m) => [m, { view: false, create: false, edit: false, delete: false }]),
@@ -392,7 +405,12 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
 
       CRM_MODULES.forEach((module) => {
         const storageKey = module === 'invoicing' ? 'invoices' : module
-        const aliases = module === 'invoicing' ? ['invoicing', 'invoices'] : [storageKey]
+        const aliases =
+          module === 'invoicing'
+            ? ['invoicing', 'invoices']
+            : module === 'prospector'
+              ? ['prospector']
+              : [storageKey]
         const actions = aliases.flatMap((key) => raw?.[key] ?? [])
 
         actions.forEach((action) => {

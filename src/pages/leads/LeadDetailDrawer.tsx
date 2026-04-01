@@ -10,6 +10,14 @@ interface Lead {
   ownerName: string
   phone: string
   email?: string
+  sourceProvider?: 'google-maps' | 'justdial' | 'indiamart'
+  sourcePlaceId?: string
+  sourcePlaceUrl?: string
+  sourceWebsite?: string
+  sourcePhone?: string
+  sourceAddress?: string
+  sourceCategory?: string
+  sourceOpeningHours?: string[]
   businessType: string
   source?: string
   notes?: string
@@ -361,6 +369,22 @@ export default function LeadDetailDrawer({ leadId, onClose, onUpdated }: LeadDet
               </div>
             </div>
 
+            {(lead.sourceProvider || lead.sourcePlaceId || lead.sourceWebsite || lead.sourcePhone || lead.sourceAddress || lead.sourceOpeningHours?.length) && (
+              <div className="border-b border-[#1f1f1f] px-6 py-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Scraper source</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <ReadOnlyField label="Provider" value={lead.sourceProvider ?? '—'} />
+                  <ReadOnlyField label="Place ID" value={lead.sourcePlaceId ?? '—'} />
+                  <ReadOnlyField label="Phone" value={lead.sourcePhone ?? lead.phone ?? '—'} />
+                  <ReadOnlyField label="Website" value={lead.sourceWebsite ?? '—'} />
+                  <ReadOnlyField label="Address" value={lead.sourceAddress ?? '—'} />
+                  <ReadOnlyField label="Category" value={lead.sourceCategory ?? '—'} />
+                  <ReadOnlyField label="Maps URL" value={lead.sourcePlaceUrl ?? '—'} />
+                  <ReadOnlyField label="Opening hours" value={lead.sourceOpeningHours?.length ? lead.sourceOpeningHours.join(' • ') : '—'} />
+                </div>
+              </div>
+            )}
+
             <div className="border-b border-[#1f1f1f] px-6 py-4">
               <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Schedule follow-up</p>
               <div className="flex items-end gap-2">
@@ -420,6 +444,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div>
       <p className="mb-0.5 text-[10px] font-medium uppercase tracking-widest text-[#3f3f46]">{label}</p>
       {children}
+    </div>
+  )
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-0.5 text-[10px] font-medium uppercase tracking-widest text-[#3f3f46]">{label}</p>
+      <p className="break-words text-[12px] text-[#a1a1aa]">{value}</p>
     </div>
   )
 }

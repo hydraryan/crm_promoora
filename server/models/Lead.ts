@@ -18,6 +18,14 @@ export interface ILead extends Document {
   ownerName: string
   phone: string
   email?: string
+  sourceProvider?: 'google-maps' | 'justdial' | 'indiamart'
+  sourcePlaceId?: string
+  sourcePlaceUrl?: string
+  sourceWebsite?: string
+  sourcePhone?: string
+  sourceAddress?: string
+  sourceCategory?: string
+  sourceOpeningHours?: string[]
   businessType: BusinessType
   stage: LeadStage
   source?: 'walk_in' | 'referral' | 'instagram' | 'cold_call' | 'other'
@@ -55,6 +63,39 @@ const leadSchema = new Schema<ILead>(
       type: String,
       lowercase: true,
       trim: true,
+    },
+    sourceProvider: {
+      type: String,
+      enum: ['google-maps', 'justdial', 'indiamart'],
+    },
+    sourcePlaceId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    sourcePlaceUrl: {
+      type: String,
+      trim: true,
+    },
+    sourceWebsite: {
+      type: String,
+      trim: true,
+    },
+    sourcePhone: {
+      type: String,
+      trim: true,
+    },
+    sourceAddress: {
+      type: String,
+      trim: true,
+    },
+    sourceCategory: {
+      type: String,
+      trim: true,
+    },
+    sourceOpeningHours: {
+      type: [String],
+      default: [],
     },
     businessType: {
       type: String,
@@ -119,6 +160,7 @@ leadSchema.index({ searchPrefixes: 1, createdBy: 1 })
 leadSchema.index({ assignedTo: 1, stage: 1, updatedAt: -1 })
 leadSchema.index({ createdAt: -1, stage: 1 })
 leadSchema.index({ updatedAt: -1, stage: 1 })
+leadSchema.index({ sourcePlaceId: 1, createdBy: 1 })
 
 leadSchema.pre('save', function () {
   const artifacts = buildSearchArtifacts([this.businessName, this.ownerName, this.phone, this.email, this.notes])

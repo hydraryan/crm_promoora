@@ -14,11 +14,13 @@ export interface IRole extends Document {
     proposals: string[]
     invoices: string[]
     invoicing: string[]
+    prospector: string[]
     communication: string[]
     reports: string[]
     team: string[]
     settings: string[]
   }
+  dailySearchLimit: number
   disabledModules: string[]
   isSystemRole: boolean
   createdAt: Date
@@ -59,6 +61,7 @@ const roleSchema = new Schema<IRole>(
         proposals: [String],
         invoices: [String],
         invoicing: [String],
+        prospector: [String],
         communication: [String],
         reports: [String],
         team: [String],
@@ -74,11 +77,17 @@ const roleSchema = new Schema<IRole>(
         proposals: [],
         invoices: [],
         invoicing: [],
+        prospector: [],
         communication: [],
         reports: [],
         team: [],
         settings: [],
       },
+    },
+    dailySearchLimit: {
+      type: Number,
+      default: 5,
+      min: 0,
     },
     disabledModules: {
       type: [String],
