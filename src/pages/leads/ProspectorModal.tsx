@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { Loader2, Search, Sparkles, X } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
 
+type SearchMode = 'discovery' | 'quality'
+
 type Candidate = {
   candidateId: string
   source: 'google-maps' | 'justdial' | 'indiamart'
@@ -22,6 +24,7 @@ type Candidate = {
   footfallDailyMin: number
   footfallDailyMax: number
   confidence: 'low' | 'medium' | 'high'
+  signals: string[]
   openingHours?: string[]
 }
 
@@ -51,8 +54,9 @@ const sourceLabels: Record<Candidate['source'], string> = {
 }
 
 export default function ProspectorModal({ isOpen, onClose, onImported }: ProspectorModalProps) {
+  const [searchMode, setSearchMode] = useState<SearchMode>('discovery')
   const [query, setQuery] = useState('')
-  const [minReviews, setMinReviews] = useState(200)
+  const [minReviews, setMinReviews] = useState(30)
   const [recencyDays, setRecencyDays] = useState(30)
   const [maxResults, setMaxResults] = useState(25)
   const [onlyNoWebsite, setOnlyNoWebsite] = useState(false)
@@ -86,6 +90,7 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
         method: 'POST',
         body: JSON.stringify({
           query: query.trim(),
+          searchMode,
           minReviews,
           recencyDays,
           maxResults,
@@ -139,6 +144,16 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
     setSelectedIds((previous) => (previous.includes(candidateId) ? previous.filter((id) => id !== candidateId) : [...previous, candidateId]))
   }
 
+  const applyMode = (mode: SearchMode) => {
+    setSearchMode(mode)
+    if (mode === 'quality') {
+      setMinReviews((previous) => Math.max(previous, 120))
+      setRecencyDays((previous) => Math.max(previous, 30))
+    } else {
+      setMinReviews((previous) => Math.min(previous, 30))
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-6xl rounded-2xl border border-[#222] bg-[#0f0f0f] shadow-2xl">
@@ -153,13 +168,43 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
         </div>
 
         <div className="space-y-4 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => applyMode('discovery')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                searchMode === 'discovery'
+                  ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40'
+                  : 'bg-[#141414] text-[#a1a1aa] hover:bg-[#1a1a1a]'
+              }`}
+            >
+              Discovery mode
+            </button>
+            <button
+              type="button"
+              onClick={() => applyMode('quality')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                searchMode === 'quality'
+                  ? 'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40'
+                  : 'bg-[#141414] text-[#a1a1aa] hover:bg-[#1a1a1a]'
+              }`}
+            >
+              Quality mode
+            </button>
+            <p className="text-xs text-[#71717a]">
+              {searchMode === 'discovery'
+                ? 'Best for newly opened or lower-review businesses.'
+                : 'Best for established businesses with stronger social proof.'}
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_120px_120px_120px_150px]">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b]" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="e.g. top cafes in chandigarh"
+                placeholder="e.g. newly opened cafes in delhi"
                 className="w-full rounded-xl border border-[#242424] bg-[#141414] py-2.5 pl-9 pr-3 text-sm text-[#e4e4e7] outline-none placeholder:text-[#52525b] focus:border-[#4f46e5]"
               />
             </div>
@@ -219,10 +264,10 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
           </div>
 
           <div className="grid grid-cols-1 gap-2 text-[11px] text-[#71717a] sm:grid-cols-4">
-            <p>Min reviews (default 200)</p>
+            <p>{searchMode === 'quality' ? 'Min reviews (recommended 120+)' : 'Min reviews (default 30)'}</p>
             <p>Recent review window (days)</p>
             <p>Result cap (1-200)</p>
-            <p>Filter by existence</p>
+            <p>Use 10-30 for newly opened</p>
           </div>
 
           {error && <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div>}
@@ -273,6 +318,9 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
                     <div className="min-w-0">
                       <p className="truncate font-medium text-[#f4f4f5]">{candidate.name}</p>
                       <p className="truncate text-xs text-[#71717a]">{candidate.primaryType || candidate.category || 'unknown'}</p>
+                      {candidate.signals?.length ? (
+                        <p className="mt-0.5 truncate text-[10px] text-[#52525b]">Why: {candidate.signals.slice(0, 2).join(' · ')}</p>
+                      ) : null}
                     </div>
                     <p className="line-clamp-2 text-xs text-[#a1a1aa]">{candidate.formattedAddress || candidate.address || '—'}</p>
                     <p className="line-clamp-2 text-xs text-[#a1a1aa]">{candidate.phone || '—'}</p>

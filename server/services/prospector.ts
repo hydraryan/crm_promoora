@@ -208,6 +208,102 @@ async function enrichGoogleCandidate(item: GoogleSearchPlace, apiKey: string, mi
   return candidate.name.length > 0 ? candidate : null
 }
 
+type ProspectorIntent = {
+  newlyOpened: boolean
+}
+
+type SearchMode = 'discovery' | 'quality'
+
+function parseProspectorIntent(query: string): ProspectorIntent {
+  const normalized = query.toLowerCase()
+  const newlyOpened = /\b(new|newly\s*opened|recent|recently\s*opened|just\s*opened)\b/.test(normalized)
+  return { newlyOpened }
+}
+
+function stripNewnessTerms(query: string): string {
+  return query
+    .replace(/\b(newly\s*opened|recently\s*opened|just\s*opened)\b/gi, ' ')
+    .replace(/\b(new|recent)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildSearchQueries(query: string, filters: IProspectorFilters, intent: ProspectorIntent): string[] {
+  const base = query.trim()
+  const stripped = stripNewnessTerms(base)
+  const queries = [base]
+
+  if (stripped.length >= 3 && stripped.toLowerCase() !== base.toLowerCase()) {
+    queries.push(stripped)
+  }
+
+  if (intent.newlyOpened || filters.recencyDays <= 21) {
+    queries.push(`${stripped || base} newly opened`)
+    queries.push(`${stripped || base} recently opened`)
+  }
+
+  return [...new Set(queries.map((item) => item.trim()).filter((item) => item.length >= 3))]
+}
+
+function resolveEffectiveMinReviews(minReviews: number, intent: ProspectorIntent, searchMode: SearchMode): number {
+  const base = Math.max(0, minReviews)
+
+  if (searchMode === 'quality') {
+    return Math.max(120, base)
+  }
+
+  if (intent.newlyOpened) {
+    return Math.min(base, 20)
+  }
+
+  return Math.min(base, 40)
+}
+
+function recencyReviewCap(recencyDays: number): number {
+  if (recencyDays <= 14) return 120
+  if (recencyDays <= 30) return 220
+  if (recencyDays <= 60) return 350
+  if (recencyDays <= 90) return 500
+  return 800
+}
+
+async function searchGoogleText(apiKey: string, textQuery: string, maxResultCount: number): Promise<ProviderResult & { places: GoogleSearchPlace[] }> {
+  const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask':
+        'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.businessStatus,places.types',
+    },
+    body: JSON.stringify({
+      textQuery,
+      maxResultCount,
+    }),
+  })
+
+  const payload = (await response.json()) as GoogleSearchResponse
+
+  if (!response.ok) {
+    return {
+      places: [],
+      candidates: [],
+      errors: [
+        {
+          source: 'google-maps',
+          message: payload.error?.message ?? `Google Places (New) request failed with ${response.status}`,
+        },
+      ],
+    }
+  }
+
+  return {
+    places: Array.isArray(payload.places) ? payload.places : [],
+    candidates: [],
+    errors: [],
+  }
+}
+
 async function fetchGoogleMapsCandidates(query: string, filters: IProspectorFilters): Promise<ProviderResult> {
   const apiKey =
     process.env.GOOGLE_PLACES_API_KEY ??
@@ -227,49 +323,63 @@ async function fetchGoogleMapsCandidates(query: string, filters: IProspectorFilt
     }
   }
 
-  const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask':
-        'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.businessStatus,places.types',
-    },
-    body: JSON.stringify({
-      textQuery: query,
-      maxResultCount: Math.min(Math.max(filters.maxResults * 2, 20), 100),
-    }),
-  })
+  const intent = parseProspectorIntent(query)
+  const searchMode: SearchMode = filters.searchMode === 'quality' ? 'quality' : 'discovery'
+  const effectiveMinReviews = resolveEffectiveMinReviews(filters.minReviews, intent, searchMode)
+  const searchQueries = buildSearchQueries(query, filters, intent)
+  const maxResultCount = Math.min(Math.max(filters.maxResults * 2, 20), 100)
 
-  const payload = (await response.json()) as GoogleSearchResponse
+  const providerErrors: IProspectorProviderError[] = []
+  const allPlaces: GoogleSearchPlace[] = []
 
-  if (!response.ok) {
+  for (const searchQuery of searchQueries) {
+    const result = await searchGoogleText(apiKey, searchQuery, maxResultCount)
+    providerErrors.push(...result.errors)
+    allPlaces.push(...result.places)
+  }
+
+  if (allPlaces.length === 0) {
+    if (providerErrors.length > 0) {
+      return {
+        candidates: [],
+        errors: providerErrors,
+      }
+    }
+
     return {
       candidates: [],
       errors: [
         {
           source: 'google-maps',
-          message: payload.error?.message ?? `Google Places (New) request failed with ${response.status}`,
+          message: 'No matching places found. Try a broader query or reduce minimum reviews for newly opened businesses.',
         },
       ],
     }
   }
 
-  if (!Array.isArray(payload.places) || payload.places.length === 0) {
-    return {
-      candidates: [],
-      errors: [],
-    }
-  }
-
-  const candidates = (
-    await Promise.all(payload.places.map((item) => enrichGoogleCandidate(item, apiKey, filters.minReviews)))
+  let candidates = (
+    await Promise.all(allPlaces.map((item) => enrichGoogleCandidate(item, apiKey, effectiveMinReviews)))
   )
     .filter((candidate): candidate is IProspectorCandidate => candidate !== null)
-    .filter((candidate) => candidate.reviewCount >= filters.minReviews)
+    .filter((candidate) => candidate.reviewCount >= effectiveMinReviews)
     .filter((candidate) => (filters.onlyNoWebsite ? !candidate.website : true))
 
-  return { candidates, errors: [] }
+  if (searchMode === 'discovery' && intent.newlyOpened) {
+    const maxReviewsForRecent = recencyReviewCap(filters.recencyDays)
+    candidates = candidates.filter((candidate) => candidate.reviewCount <= maxReviewsForRecent)
+  }
+
+  const dedupedCandidates = dedupeCandidates(candidates)
+
+  if (dedupedCandidates.length === 0) {
+    providerErrors.push({
+      source: 'google-maps',
+      message:
+        'Candidates were filtered out by current constraints. For newly opened businesses, try minimum reviews between 10 and 30.',
+    })
+  }
+
+  return { candidates: dedupedCandidates, errors: providerErrors }
 }
 
 function notConfiguredProvider(provider: ProspectorProvider): ProviderResult {

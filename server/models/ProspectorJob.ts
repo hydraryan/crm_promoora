@@ -38,6 +38,7 @@ export interface IProspectorProviderError {
 }
 
 export interface IProspectorFilters {
+  searchMode?: 'discovery' | 'quality'
   minReviews: number
   recencyDays: number
   maxResults: number
@@ -101,7 +102,8 @@ const prospectorJobSchema = new Schema<IProspectorJob>(
     query: { type: String, required: true, trim: true, index: true },
     status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending', index: true },
     filters: {
-      minReviews: { type: Number, required: true, default: 200, min: 0 },
+      searchMode: { type: String, enum: ['discovery', 'quality'], default: 'discovery' },
+      minReviews: { type: Number, required: true, default: 30, min: 0 },
       recencyDays: { type: Number, required: true, default: 30, min: 1 },
       maxResults: { type: Number, required: true, default: 25, min: 1, max: 200 },
       onlyNoWebsite: { type: Boolean, default: false },

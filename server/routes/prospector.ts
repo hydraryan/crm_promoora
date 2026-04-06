@@ -51,6 +51,7 @@ router.post('/jobs', async (req: AuthRequest, res: Response) => {
 
     const body = req.body as {
       query?: string
+      searchMode?: 'discovery' | 'quality'
       minReviews?: number
       recencyDays?: number
       maxResults?: number
@@ -63,8 +64,12 @@ router.post('/jobs', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Query must be at least 3 characters long' })
     }
 
+    const searchMode: 'discovery' | 'quality' = body.searchMode === 'quality' ? 'quality' : 'discovery'
+    const defaultMinReviews = searchMode === 'quality' ? 120 : 30
+
     const filters = {
-      minReviews: Math.max(0, Math.floor(body.minReviews ?? 200)),
+      searchMode,
+      minReviews: Math.max(0, Math.floor(body.minReviews ?? defaultMinReviews)),
       recencyDays: Math.max(1, Math.floor(body.recencyDays ?? 30)),
       maxResults: Math.min(200, Math.max(1, Math.floor(body.maxResults ?? 25))),
       onlyNoWebsite: Boolean(body.onlyNoWebsite),
