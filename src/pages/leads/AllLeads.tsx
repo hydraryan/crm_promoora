@@ -371,9 +371,10 @@ export default function AllLeads({
       <ProspectorModal
         isOpen={showProspectorModal}
         onClose={() => setShowProspectorModal(false)}
+        isAdmin={role === 'admin'}
+        teamMembers={teamMembers}
         onImported={() => {
           refetch()
-          setShowProspectorModal(false)
         }}
       />
 

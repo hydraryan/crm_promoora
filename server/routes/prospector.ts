@@ -214,6 +214,7 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
     let created = 0
     let skippedDuplicates = 0
     let skippedInvalid = 0
+    const createdLeadIds: string[] = []
 
     for (const candidate of selected) {
       if (!candidate.name || !candidate.isActive || candidate.reviewCount < job.filters.minReviews) {
@@ -238,7 +239,7 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
 
       const leadPhone = candidate.phone?.trim() || candidate.phone || 'NA'
 
-      await Lead.create({
+      const createdLead = await Lead.create({
         businessName: candidate.name,
         ownerName: candidate.name,
         phone: leadPhone,
@@ -272,6 +273,7 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
         lastActivityAt: new Date(),
       })
 
+      createdLeadIds.push(createdLead._id.toString())
       created += 1
     }
 
@@ -295,6 +297,7 @@ router.post('/jobs/:id/import', async (req: AuthRequest, res: Response) => {
       skippedDuplicates,
       skippedInvalid,
       selected: selected.length,
+      createdLeadIds,
     })
   } catch (error) {
     console.error('Prospector import error:', error)

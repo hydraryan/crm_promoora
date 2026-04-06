@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Search, Sparkles, X } from 'lucide-react'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -45,6 +45,8 @@ interface ProspectorModalProps {
   isOpen: boolean
   onClose: () => void
   onImported: () => void
+  isAdmin: boolean
+  teamMembers: Array<{ _id: string; name: string; initials: string }>
 }
 
 const sourceLabels: Record<Candidate['source'], string> = {
@@ -53,7 +55,9 @@ const sourceLabels: Record<Candidate['source'], string> = {
   indiamart: 'IndiaMART',
 }
 
-export default function ProspectorModal({ isOpen, onClose, onImported }: ProspectorModalProps) {
+export default function ProspectorModal({ isOpen, onClose, onImported, isAdmin, teamMembers }: ProspectorModalProps) {
+  const [assignedToId, setAssignedToId] = useState('')
+  const [reassignToId, setReassignToId] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('discovery')
   const [query, setQuery] = useState('')
   const [minReviews, setMinReviews] = useState(30)
@@ -66,10 +70,25 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
   const [info, setInfo] = useState<string | null>(null)
   const [job, setJob] = useState<ProspectorJob | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [createdLeadIds, setCreatedLeadIds] = useState<string[]>([])
+  const [showReassignPanel, setShowReassignPanel] = useState(false)
 
   const selectedCount = selectedIds.length
 
   const candidates = useMemo(() => job?.candidates ?? [], [job])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setAssignedToId('')
+      setReassignToId('')
+      setCreatedLeadIds([])
+      setShowReassignPanel(false)
+      setJob(null)
+      setSelectedIds([])
+      setError(null)
+      setInfo(null)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -84,6 +103,8 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
     setInfo(null)
     setJob(null)
     setSelectedIds([])
+    setCreatedLeadIds([])
+    setShowReassignPanel(false)
 
     try {
       const response = await apiFetch<{ job: ProspectorJob }>('/prospector/jobs', {
@@ -95,6 +116,7 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
           recencyDays,
           maxResults,
           onlyNoWebsite,
+          assignedTo: assignedToId || undefined,
           providers: ['google-maps'],
         }),
       })
@@ -115,6 +137,11 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
       return
     }
 
+    if (isAdmin && !assignedToId) {
+      setError('Select a teammate to assign these leads to before importing')
+      return
+    }
+
     setIsImporting(true)
     setError(null)
 
@@ -124,14 +151,18 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
         skippedDuplicates: number
         skippedInvalid: number
         selected: number
+        createdLeadIds: string[]
       }>(`/prospector/jobs/${job._id}/import`, {
         method: 'POST',
-        body: JSON.stringify({ candidateIds: selectedIds }),
+        body: JSON.stringify({ candidateIds: selectedIds, assignedTo: isAdmin ? assignedToId : undefined }),
       })
 
+      setCreatedLeadIds(response.createdLeadIds ?? [])
       setInfo(
         `Imported ${response.imported}/${response.selected}. Skipped duplicates: ${response.skippedDuplicates}, invalid: ${response.skippedInvalid}.`
       )
+      setShowReassignPanel(true)
+      setReassignToId(assignedToId)
       onImported()
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : 'Failed to import selected candidates')
@@ -151,6 +182,36 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
       setRecencyDays((previous) => Math.max(previous, 30))
     } else {
       setMinReviews((previous) => Math.min(previous, 30))
+    }
+  }
+
+  const bulkReassignImported = async () => {
+    if (!isAdmin || createdLeadIds.length === 0) return
+    if (!reassignToId) {
+      setError('Select a teammate to reassign the imported leads to')
+      return
+    }
+
+    setIsImporting(true)
+    setError(null)
+
+    try {
+      await Promise.all(
+        createdLeadIds.map((leadId) =>
+          apiFetch(`/leads/${leadId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ assignedTo: reassignToId }),
+          })
+        )
+      )
+
+      setInfo(`Reassigned ${createdLeadIds.length} imported leads in one action.`)
+      setShowReassignPanel(false)
+      onImported()
+    } catch (reassignError) {
+      setError(reassignError instanceof Error ? reassignError.message : 'Failed to bulk reassign imported leads')
+    } finally {
+      setIsImporting(false)
     }
   }
 
@@ -197,6 +258,33 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
                 : 'Best for established businesses with stronger social proof.'}
             </p>
           </div>
+
+          {isAdmin ? (
+            <div className="rounded-xl border border-[#242424] bg-[#121212] p-3">
+              <p className="mb-2 text-[11px] uppercase tracking-wider text-[#52525b]">Admin assignment</p>
+              <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                <div>
+                  <label className="mb-1 block text-xs text-[#71717a]">Assign imported leads to</label>
+                  <select
+                    value={assignedToId}
+                    onChange={(event) => setAssignedToId(event.target.value)}
+                    className="w-full rounded-xl border border-[#242424] bg-[#141414] px-3 py-2.5 text-sm text-[#e4e4e7] outline-none focus:border-[#4f46e5]"
+                  >
+                    <option value="">Select a teammate</option>
+                    {teamMembers.map((member) => (
+                      <option key={member._id} value={member._id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-[#71717a]">One-click flow</p>
+                  <p className="text-xs text-[#a1a1aa]">Pick one teammate here and all imported leads will be assigned to them in a single import action.</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_120px_120px_120px_150px]">
             <div className="relative">
@@ -281,6 +369,46 @@ export default function ProspectorModal({ isOpen, onClose, onImported }: Prospec
                   <li key={`${providerError.source}-${providerError.message}`}>• {sourceLabels[providerError.source]}: {providerError.message}</li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+
+          {isAdmin && showReassignPanel && createdLeadIds.length > 0 ? (
+            <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-indigo-200">Imported batch ready</p>
+                  <p className="text-[11px] text-indigo-100/80">Reassign all imported leads in one action, without editing each lead manually.</p>
+                </div>
+                <p className="text-[11px] text-indigo-100/80">{createdLeadIds.length} leads imported</p>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                <div>
+                  <label className="mb-1 block text-xs text-indigo-100/80">Reassign imported batch to</label>
+                  <select
+                    value={reassignToId}
+                    onChange={(event) => setReassignToId(event.target.value)}
+                    className="w-full rounded-xl border border-indigo-500/20 bg-[#141414] px-3 py-2.5 text-sm text-[#e4e4e7] outline-none focus:border-indigo-400"
+                  >
+                    <option value="">Select a teammate</option>
+                    {teamMembers.map((member) => (
+                      <option key={member._id} value={member._id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void bulkReassignImported()
+                  }}
+                  disabled={isImporting || createdLeadIds.length === 0}
+                  className="inline-flex items-center justify-center rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isImporting ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Reassign batch
+                </button>
+              </div>
             </div>
           ) : null}
 
