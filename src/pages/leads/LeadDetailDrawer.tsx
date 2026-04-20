@@ -229,7 +229,7 @@ export default function LeadDetailDrawer({ leadId, onClose, onUpdated }: LeadDet
         ) : !lead ? (
           <div className="px-6 py-8 text-center text-sm text-[#52525b]">Lead not found.</div>
         ) : (
-          <>
+          <div className="flex-1 overflow-y-auto">
             <div className="border-b border-[#1f1f1f] px-6 py-4">
               <div className="flex items-center gap-1">
                 {PIPELINE_STAGES.filter((s) => s !== 'Lost').map((stage, i, arr) => {
@@ -410,7 +410,7 @@ export default function LeadDetailDrawer({ leadId, onClose, onUpdated }: LeadDet
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="px-6 py-4">
               <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-[#3f3f46]">Activity</p>
               <div className="space-y-px">
                 {activities.map((act) => {
@@ -430,7 +430,7 @@ export default function LeadDetailDrawer({ leadId, onClose, onUpdated }: LeadDet
                 })}
               </div>
             </div>
-          </>
+          </div>
         )}
 
         <div className="border-t border-[#1f1f1f] px-6 py-3 text-[12px] text-[#52525b]">{lead?.notes ? `Notes: ${lead.notes}` : 'No notes yet'}</div>
